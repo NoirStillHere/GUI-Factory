@@ -1,6 +1,6 @@
 -- ==========================================================
--- NoirButtonFactory v1.3
--- Author: Noir (cập nhật thêm toggle)
+-- NoirButtonFactory v1.5
+-- Author: Noir (fix ZIndex icon)
 -- Description: Module tạo nút nổi hình vuông, nền đen mờ, icon
 -- ==========================================================
 
@@ -33,7 +33,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     corner.CornerRadius = UDim.new(0, cornerRadius)
     corner.Parent = btn
 
-    -- Icon
+    -- Icon (ZIndex cao hơn nút để không bị đè)
     local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(0.6, 0, 0.6, 0)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -42,15 +42,8 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.Image = iconId
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
+    icon.ZIndex = 3 -- ✅ Cao hơn btn (2)
     icon.Parent = btn
-
-    -- Viền (chỉ thêm nếu có yêu cầu)
-    if config.StrokeColor then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = config.StrokeColor
-        stroke.Thickness = config.StrokeThickness or 2
-        stroke.Parent = btn
-    end
 
     -- Lưu các connection để cleanup
     local connections = {}
@@ -80,26 +73,23 @@ end
 -- PUBLIC API - Nút thường
 -- ==========================================================
 function NoirButtonFactory.CreateFloatingButton(config)
-    -- Kiểm tra tham số bắt buộc
     if not config.Position then error("config.Position is required!") end
     if not config.IconId then error("config.IconId is required!") end
     if not config.Callback then error("config.Callback is required!") end
 
     local name = config.Name or "NoirFloatingButton"
 
-    -- Lấy PlayerGui
     local player = Players.LocalPlayer
     local gui = Instance.new("ScreenGui")
     gui.Name = name
     gui.ResetOnSpawn = false
     gui.IgnoreGuiInset = true
     gui.DisplayOrder = 999999999
+    gui.ZIndex = 999 -- ✅ ScreenGui cũng có ZIndex
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Tạo nút và lấy connections
     local btn, connections = CreateBaseButton(gui, config, config.IconId, config.Callback)
 
-    -- Trả về API quản lý nút
     return {
         Button = btn,
         Gui = gui,
@@ -131,45 +121,31 @@ function NoirButtonFactory.CreateFloatingButton(config)
             if icon then
                 icon.Image = newIconId
             end
-        end,
-        SetStrokeColor = function(newColor)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Color = newColor
-            end
-        end,
-        SetStrokeThickness = function(newThickness)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Thickness = newThickness
-            end
         end
     }
 end
 
 -- ==========================================================
--- PUBLIC API - Nút Toggle (bật/tắt)
+-- PUBLIC API - Nút Toggle
 -- ==========================================================
 function NoirButtonFactory.CreateToggleButton(config)
-    -- Kiểm tra tham số bắt buộc
     if not config.Position then error("config.Position is required!") end
     if not config.IconId then error("config.IconId is required!") end
     if not config.OnCallback then error("config.OnCallback is required!") end
     if not config.OffCallback then error("config.OffCallback is required!") end
 
     local name = config.Name or "NoirToggleButton"
-    local defaultState = config.DefaultState or false -- false = Off, true = On
+    local defaultState = config.DefaultState or false
 
-    -- Lấy PlayerGui
     local player = Players.LocalPlayer
     local gui = Instance.new("ScreenGui")
     gui.Name = name
     gui.ResetOnSpawn = false
     gui.IgnoreGuiInset = true
     gui.DisplayOrder = 999999999
+    gui.ZIndex = 999
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Tạo nút
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, config.Size or 55, 0, config.Size or 55)
     btn.Position = config.Position
@@ -180,12 +156,10 @@ function NoirButtonFactory.CreateToggleButton(config)
     btn.ZIndex = 2
     btn.Parent = gui
 
-    -- Bo góc
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, config.CornerRadius or 10)
     corner.Parent = btn
 
-    -- Icon
     local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(0.6, 0, 0.6, 0)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -194,21 +168,12 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.Image = config.IconId
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
+    icon.ZIndex = 3 -- ✅ Cao hơn btn
     icon.Parent = btn
 
-    -- Viền (chỉ thêm nếu có yêu cầu)
-    if config.StrokeColor then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = config.StrokeColor
-        stroke.Thickness = config.StrokeThickness or 2
-        stroke.Parent = btn
-    end
-
-    -- Trạng thái
     local state = defaultState
     local connections = {}
 
-    -- Hover effect
     local transparency = config.BackgroundTransparency or 0.3
     local function OnHover()
         TweenService:Create(btn, TweenInfo.new(0.2), {
@@ -223,11 +188,9 @@ function NoirButtonFactory.CreateToggleButton(config)
     table.insert(connections, btn.MouseEnter:Connect(OnHover))
     table.insert(connections, btn.MouseLeave:Connect(OnLeave))
 
-    -- Click toggle
     table.insert(connections, btn.MouseButton1Click:Connect(function()
         state = not state
         if state then
-            -- Bật
             if config.OnColor then
                 btn.BackgroundColor3 = config.OnColor
             end
@@ -236,22 +199,20 @@ function NoirButtonFactory.CreateToggleButton(config)
             end
             config.OnCallback()
         else
-            -- Tắt
             if config.OffColor then
                 btn.BackgroundColor3 = config.OffColor
             elseif config.OnColor then
-                btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Trở về đen
+                btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
             end
             if config.OffIconId then
                 icon.Image = config.OffIconId
             elseif config.OnIconId then
-                icon.Image = config.IconId -- Trở về icon gốc
+                icon.Image = config.IconId
             end
             config.OffCallback()
         end
     end))
 
-    -- Set trạng thái ban đầu
     if defaultState then
         if config.OnColor then
             btn.BackgroundColor3 = config.OnColor
@@ -261,7 +222,6 @@ function NoirButtonFactory.CreateToggleButton(config)
         end
     end
 
-    -- Trả về API
     return {
         Button = btn,
         Gui = gui,
@@ -293,7 +253,6 @@ function NoirButtonFactory.CreateToggleButton(config)
             end
         end,
         Toggle = function()
-            -- Đảo trạng thái
             state = not state
             if state then
                 if config.OnColor then
@@ -340,22 +299,12 @@ function NoirButtonFactory.CreateToggleButton(config)
                 btn.Size = UDim2.new(0, newSize, 0, newSize)
             end
         end,
-        SetStrokeColor = function(newColor)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Color = newColor
-            end
-        end,
-        SetStrokeThickness = function(newThickness)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Thickness = newThickness
+        SetIcon = function(newIconId)
+            if icon then
+                icon.Image = newIconId
             end
         end
     }
 end
 
--- ==========================================================
--- EXPORT MODULE
--- ==========================================================
 return NoirButtonFactory
