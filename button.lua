@@ -1,7 +1,6 @@
 local NoirButtonFactory = {}
 
--- services
-local CoreGui = game:GetService("CoreGui")
+-- services 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
@@ -39,58 +38,25 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.Parent = btn
 
+    -- Lưu các connection để cleanup
+    local connections = {}
+
     -- Hover effect
-    btn.MouseEnter:Connect(function()
+    local function OnHover()
         TweenService:Create(btn, TweenInfo.new(0.2), {
             BackgroundTransparency = math.max(transparency - 0.1, 0)
         }):Play()
-    end)
-    btn.MouseLeave:Connect(function()
+    end
+    local function OnLeave()
         TweenService:Create(btn, TweenInfo.new(0.2), {
             BackgroundTransparency = transparency
         }):Play()
-    end)
+    end
+    table.insert(connections, btn.MouseEnter:Connect(OnHover))
+    table.insert(connections, btn.MouseLeave:Connect(OnLeave))
 
     -- Callback click
-    btn.MouseButton1Click:Connect(callback)
-
-    return btn
-end
-
--- ==========================================================
--- PUBLIC API
--- ==========================================================
-
--- Hàm tạo nút nổi
--- config: Bảng cấu hình
---   Position (UDim2, bắt buộc): Vị trí nút trên màn hình
---   IconId (string, bắt buộc): ID của icon (vd: "rbxassetid://123456")
---   Callback (function, bắt buộc): Hàm chạy khi bấm nút
---   Size (number, optional): Kích thước nút (mặc định 55)
---   BackgroundTransparency (number, optional): Độ mờ nền (0-1, mặc định 0.3)
---   CornerRadius (number, optional): Độ bo góc (mặc định 10)
---   Draggable (boolean, optional): Cho phép kéo thả? (mặc định true)
---   Name (string, optional): Tên của ScreenGui (mặc định "NoirFloatingButton")
---   StrokeColor (Color3, optional): Màu viền (mặc định không có)
---   StrokeThickness (number, optional): Độ dày viền (mặc định 2)
-function NoirButtonFactory.CreateFloatingButton(config)
-    -- Kiểm tra các tham số bắt buộc
-    if not config.Position then error("config.Position is required!") end
-    if not config.IconId then error("config.IconId is required!") end
-    if not config.Callback then error("config.Callback is required!") end
-
-    local name = config.Name or "NoirFloatingButton"
-
-    -- Tạo ScreenGui
-    local gui = Instance.new("ScreenGui")
-    gui.Name = name
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 999999999
-    gui.Parent = CoreGui
-
-    -- Tạo nút
-    local btn = CreateBaseButton(gui, config, config.IconId, config.Callback)
+    table.insert(connections, btn.MouseButton1Click:Connect(callback))
 
     -- Thêm stroke nếu có yêu cầu
     if config.StrokeColor then
@@ -100,11 +66,57 @@ function NoirButtonFactory.CreateFloatingButton(config)
         stroke.Parent = btn
     end
 
-    -- Trả về API để quản lý nút
+    -- Trả về btn kèm connections để cleanup sau này
+    return btn, connections
+end
+
+-- snap
+local function SnapToEdge(btn)
+    if not btn then return end
+    local screenSize = btn.AbsoluteSize
+    local btnPos = btn.AbsolutePosition
+    local centerX = btnPos.X + (screenSize.X / 2)
+    local viewportX = workspace.CurrentCamera.ViewportSize.X
+
+    -- Snap về trái hoặc phải
+    local targetX = (centerX < viewportX / 2) and 0 or 1
+    btn.Position = UDim2.new(targetX, 0, btn.Position.Y.Scale, btn.Position.Y.Offset)
+end
+
+-- api
+function NoirButtonFactory.CreateFloatingButton(config)
+    -- Kiểm tra tham số bắt buộc
+    if not config.Position then error("config.Position is required!") end
+    if not config.IconId then error("config.IconId is required!") end
+    if not config.Callback then error("config.Callback is required!") end
+
+    local name = config.Name or "NoirFloatingButton"
+
+    -- Lấy PlayerGui (dễ test hơn CoreGui)
+    local player = Players.LocalPlayer
+    local gui = Instance.new("ScreenGui")
+    gui.Name = name
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 999999999
+    gui.Parent = player:WaitForChild("PlayerGui")
+
+    -- Tạo nút và lấy connections
+    local btn, connections = CreateBaseButton(gui, config, config.IconId, config.Callback)
+
+    -- Trả về API quản lý nút
     return {
         Button = btn,
         Gui = gui,
+        -- Gọi hàm snap khi người dùng muốn (chỉ gọi thôi, không tự động)
+        SnapToEdge = function()
+            SnapToEdge(btn)
+        end,
         Destroy = function()
+            -- Ngắt kết nối để tránh memory leak
+            for _, con in ipairs(connections) do
+                con:Disconnect()
+            end
             if gui and gui.Parent then
                 gui:Destroy()
             end
