@@ -1,12 +1,10 @@
 -- ==========================================================
--- NoirButtonFactory v1.3
--- Author: Noir (cập nhật thêm toggle)
--- Description: Module tạo nút nổi hình vuông, nền đen mờ, icon
+-- NoirButtonFactory v1.4
+-- Author: Noir (bỏ stroke, nâng zindex icon)
 -- ==========================================================
 
 local NoirButtonFactory = {}
 
--- ===== SERVICE REFERENCES =====
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
@@ -25,7 +23,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     btn.BackgroundTransparency = transparency
     btn.Draggable = draggable
     btn.Text = ""
-    btn.ZIndex = 2
+    btn.ZIndex = 1  -- Nút ở lớp dưới
     btn.Parent = parent
 
     -- Bo góc
@@ -33,7 +31,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     corner.CornerRadius = UDim.new(0, cornerRadius)
     corner.Parent = btn
 
-    -- Icon
+    -- Icon (đặt ZIndex cao hơn để không bị che)
     local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(0.6, 0, 0.6, 0)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -42,17 +40,12 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.Image = iconId
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
+    icon.ZIndex = 10  -- ✅ Cao hơn nút
     icon.Parent = btn
 
-    -- Viền (chỉ thêm nếu có yêu cầu)
-    if config.StrokeColor then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = config.StrokeColor
-        stroke.Thickness = config.StrokeThickness or 2
-        stroke.Parent = btn
-    end
+    -- Bỏ hoàn toàn UIStroke (không tạo nữa)
 
-    -- Lưu các connection để cleanup
+    -- Lưu connections
     local connections = {}
 
     -- Hover effect
@@ -69,10 +62,8 @@ local function CreateBaseButton(parent, config, iconId, callback)
     table.insert(connections, btn.MouseEnter:Connect(OnHover))
     table.insert(connections, btn.MouseLeave:Connect(OnLeave))
 
-    -- Callback click
     table.insert(connections, btn.MouseButton1Click:Connect(callback))
 
-    -- Trả về btn kèm connections để cleanup sau này
     return btn, connections
 end
 
@@ -80,14 +71,11 @@ end
 -- PUBLIC API - Nút thường
 -- ==========================================================
 function NoirButtonFactory.CreateFloatingButton(config)
-    -- Kiểm tra tham số bắt buộc
     if not config.Position then error("config.Position is required!") end
     if not config.IconId then error("config.IconId is required!") end
     if not config.Callback then error("config.Callback is required!") end
 
     local name = config.Name or "NoirFloatingButton"
-
-    -- Lấy PlayerGui
     local player = Players.LocalPlayer
     local gui = Instance.new("ScreenGui")
     gui.Name = name
@@ -96,71 +84,38 @@ function NoirButtonFactory.CreateFloatingButton(config)
     gui.DisplayOrder = 999999999
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Tạo nút và lấy connections
     local btn, connections = CreateBaseButton(gui, config, config.IconId, config.Callback)
 
-    -- Trả về API quản lý nút
     return {
         Button = btn,
         Gui = gui,
         Destroy = function()
-            for _, con in ipairs(connections) do
-                con:Disconnect()
-            end
-            if gui and gui.Parent then
-                gui:Destroy()
-            end
+            for _, con in ipairs(connections) do con:Disconnect() end
+            if gui and gui.Parent then gui:Destroy() end
         end,
-        SetVisible = function(state)
-            if gui then
-                gui.Enabled = state
-            end
-        end,
-        SetPosition = function(newPos)
-            if btn then
-                btn.Position = newPos
-            end
-        end,
-        SetSize = function(newSize)
-            if btn then
-                btn.Size = UDim2.new(0, newSize, 0, newSize)
-            end
-        end,
+        SetVisible = function(state) if gui then gui.Enabled = state end end,
+        SetPosition = function(newPos) if btn then btn.Position = newPos end end,
+        SetSize = function(newSize) if btn then btn.Size = UDim2.new(0, newSize, 0, newSize) end end,
         SetIcon = function(newIconId)
             local icon = btn:FindFirstChildOfClass("ImageLabel")
-            if icon then
-                icon.Image = newIconId
-            end
+            if icon then icon.Image = newIconId end
         end,
-        SetStrokeColor = function(newColor)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Color = newColor
-            end
-        end,
-        SetStrokeThickness = function(newThickness)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Thickness = newThickness
-            end
-        end
+        -- ⚠️ Đã bỏ các hàm SetStrokeColor, SetStrokeThickness
     }
 end
 
 -- ==========================================================
--- PUBLIC API - Nút Toggle (bật/tắt)
+-- PUBLIC API - Nút Toggle
 -- ==========================================================
 function NoirButtonFactory.CreateToggleButton(config)
-    -- Kiểm tra tham số bắt buộc
     if not config.Position then error("config.Position is required!") end
     if not config.IconId then error("config.IconId is required!") end
     if not config.OnCallback then error("config.OnCallback is required!") end
     if not config.OffCallback then error("config.OffCallback is required!") end
 
     local name = config.Name or "NoirToggleButton"
-    local defaultState = config.DefaultState or false -- false = Off, true = On
+    local defaultState = config.DefaultState or false
 
-    -- Lấy PlayerGui
     local player = Players.LocalPlayer
     local gui = Instance.new("ScreenGui")
     gui.Name = name
@@ -169,7 +124,6 @@ function NoirButtonFactory.CreateToggleButton(config)
     gui.DisplayOrder = 999999999
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Tạo nút
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, config.Size or 55, 0, config.Size or 55)
     btn.Position = config.Position
@@ -177,15 +131,13 @@ function NoirButtonFactory.CreateToggleButton(config)
     btn.BackgroundTransparency = config.BackgroundTransparency or 0.3
     btn.Draggable = config.Draggable ~= false
     btn.Text = ""
-    btn.ZIndex = 2
+    btn.ZIndex = 1
     btn.Parent = gui
 
-    -- Bo góc
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, config.CornerRadius or 10)
     corner.Parent = btn
 
-    -- Icon
     local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(0.6, 0, 0.6, 0)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -194,22 +146,15 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.Image = config.IconId
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
+    icon.ZIndex = 10  -- ✅ Cao hơn nút
     icon.Parent = btn
 
-    -- Viền (chỉ thêm nếu có yêu cầu)
-    if config.StrokeColor then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = config.StrokeColor
-        stroke.Thickness = config.StrokeThickness or 2
-        stroke.Parent = btn
-    end
+    -- Bỏ hoàn toàn UIStroke
 
-    -- Trạng thái
     local state = defaultState
     local connections = {}
-
-    -- Hover effect
     local transparency = config.BackgroundTransparency or 0.3
+
     local function OnHover()
         TweenService:Create(btn, TweenInfo.new(0.2), {
             BackgroundTransparency = math.max(transparency - 0.1, 0)
@@ -223,139 +168,67 @@ function NoirButtonFactory.CreateToggleButton(config)
     table.insert(connections, btn.MouseEnter:Connect(OnHover))
     table.insert(connections, btn.MouseLeave:Connect(OnLeave))
 
-    -- Click toggle
     table.insert(connections, btn.MouseButton1Click:Connect(function()
         state = not state
         if state then
-            -- Bật
-            if config.OnColor then
-                btn.BackgroundColor3 = config.OnColor
-            end
-            if config.OnIconId then
-                icon.Image = config.OnIconId
-            end
+            if config.OnColor then btn.BackgroundColor3 = config.OnColor end
+            if config.OnIconId then icon.Image = config.OnIconId end
             config.OnCallback()
         else
-            -- Tắt
-            if config.OffColor then
-                btn.BackgroundColor3 = config.OffColor
-            elseif config.OnColor then
-                btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Trở về đen
-            end
-            if config.OffIconId then
-                icon.Image = config.OffIconId
-            elseif config.OnIconId then
-                icon.Image = config.IconId -- Trở về icon gốc
-            end
+            if config.OffColor then btn.BackgroundColor3 = config.OffColor
+            elseif config.OnColor then btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end
+            if config.OffIconId then icon.Image = config.OffIconId
+            elseif config.OnIconId then icon.Image = config.IconId end
             config.OffCallback()
         end
     end))
 
-    -- Set trạng thái ban đầu
     if defaultState then
-        if config.OnColor then
-            btn.BackgroundColor3 = config.OnColor
-        end
-        if config.OnIconId then
-            icon.Image = config.OnIconId
-        end
+        if config.OnColor then btn.BackgroundColor3 = config.OnColor end
+        if config.OnIconId then icon.Image = config.OnIconId end
     end
 
-    -- Trả về API
     return {
         Button = btn,
         Gui = gui,
-        GetState = function()
-            return state
-        end,
+        GetState = function() return state end,
         SetState = function(newState)
             state = newState
             if state then
-                if config.OnColor then
-                    btn.BackgroundColor3 = config.OnColor
-                end
-                if config.OnIconId then
-                    icon.Image = config.OnIconId
-                end
+                if config.OnColor then btn.BackgroundColor3 = config.OnColor end
+                if config.OnIconId then icon.Image = config.OnIconId end
                 config.OnCallback()
             else
-                if config.OffColor then
-                    btn.BackgroundColor3 = config.OffColor
-                elseif config.OnColor then
-                    btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-                end
-                if config.OffIconId then
-                    icon.Image = config.OffIconId
-                elseif config.OnIconId then
-                    icon.Image = config.IconId
-                end
+                if config.OffColor then btn.BackgroundColor3 = config.OffColor
+                elseif config.OnColor then btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end
+                if config.OffIconId then icon.Image = config.OffIconId
+                elseif config.OnIconId then icon.Image = config.IconId end
                 config.OffCallback()
             end
         end,
         Toggle = function()
-            -- Đảo trạng thái
             state = not state
             if state then
-                if config.OnColor then
-                    btn.BackgroundColor3 = config.OnColor
-                end
-                if config.OnIconId then
-                    icon.Image = config.OnIconId
-                end
+                if config.OnColor then btn.BackgroundColor3 = config.OnColor end
+                if config.OnIconId then icon.Image = config.OnIconId end
                 config.OnCallback()
             else
-                if config.OffColor then
-                    btn.BackgroundColor3 = config.OffColor
-                elseif config.OnColor then
-                    btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-                end
-                if config.OffIconId then
-                    icon.Image = config.OffIconId
-                elseif config.OnIconId then
-                    icon.Image = config.IconId
-                end
+                if config.OffColor then btn.BackgroundColor3 = config.OffColor
+                elseif config.OnColor then btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end
+                if config.OffIconId then icon.Image = config.OffIconId
+                elseif config.OnIconId then icon.Image = config.IconId end
                 config.OffCallback()
             end
         end,
         Destroy = function()
-            for _, con in ipairs(connections) do
-                con:Disconnect()
-            end
-            if gui and gui.Parent then
-                gui:Destroy()
-            end
+            for _, con in ipairs(connections) do con:Disconnect() end
+            if gui and gui.Parent then gui:Destroy() end
         end,
-        SetVisible = function(state)
-            if gui then
-                gui.Enabled = state
-            end
-        end,
-        SetPosition = function(newPos)
-            if btn then
-                btn.Position = newPos
-            end
-        end,
-        SetSize = function(newSize)
-            if btn then
-                btn.Size = UDim2.new(0, newSize, 0, newSize)
-            end
-        end,
-        SetStrokeColor = function(newColor)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Color = newColor
-            end
-        end,
-        SetStrokeThickness = function(newThickness)
-            local stroke = btn:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Thickness = newThickness
-            end
-        end
+        SetVisible = function(state) if gui then gui.Enabled = state end end,
+        SetPosition = function(newPos) if btn then btn.Position = newPos end end,
+        SetSize = function(newSize) if btn then btn.Size = UDim2.new(0, newSize, 0, newSize) end end,
+        -- ⚠️ Đã bỏ các hàm SetStrokeColor, SetStrokeThickness
     }
 end
 
--- ==========================================================
--- EXPORT MODULE
--- ==========================================================
 return NoirButtonFactory
