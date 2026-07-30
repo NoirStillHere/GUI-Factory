@@ -1,44 +1,41 @@
 -- ==========================================================
--- NoirButtonFactory v1.9
--- Author: Noir (nâng cấp Settings Panel: quản lý nút + config)
+-- NoirCore v1.0 - Hệ sinh thái quản lý nút
 -- ==========================================================
-
-local NoirButtonFactory = {}
+local NoirCore = {}
 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
--- ===== INTERNAL STATE =====
+-- Internal state
 local isLocked = false
 local allButtons = {}
 local lockButtonInstance = nil
 local settingsButtonInstance = nil
 local settingsPanelInstance = nil
-local isModuleLoaded = false
+local isLoaded = false
 local buttonCounter = 0
-local savedConfigs = {}  -- Lưu config của các nút
 
 -- ===== RESIZE HANDLE =====
 local function CreateResizeHandle(btn)
     local handle = Instance.new("Frame")
-    handle.Size = UDim2.new(0, 12, 0, 12)
-    handle.Position = UDim2.new(1, -12, 1, -12)
+    handle.Size = UDim2.new(0, 10, 0, 10)
+    handle.Position = UDim2.new(1, -10, 1, -10)
     handle.AnchorPoint = Vector2.new(0, 0)
-    handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    handle.BackgroundTransparency = 0.5
+    handle.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    handle.BackgroundTransparency = 0.4
     handle.ZIndex = 20
     handle.Parent = btn
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 3)
+    corner.CornerRadius = UDim.new(0, 2)
     corner.Parent = handle
 
     local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(1, 0, 1, 0)
     icon.Position = UDim2.new(0, 0, 0, 0)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"
+    icon.Image = "rbxassetid://12232156257"  -- Icon mũi tên chéo
     icon.ImageColor3 = Color3.fromRGB(0, 0, 0)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 21
@@ -73,7 +70,7 @@ local function CreateResizeHandle(btn)
     handle.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isResizing = false
-            handle.BackgroundTransparency = 0.5
+            handle.BackgroundTransparency = 0.4
         end
     end)
 
@@ -82,13 +79,13 @@ local function CreateResizeHandle(btn)
     end)
     
     handle.MouseLeave:Connect(function()
-        if not isResizing then handle.BackgroundTransparency = 0.5 end
+        if not isResizing then handle.BackgroundTransparency = 0.4 end
     end)
 
     return handle
 end
 
--- ===== INTERNAL FUNCTION =====
+-- ===== TẠO NÚT CƠ BẢN =====
 local function CreateBaseButton(parent, config, iconId, callback)
     local size = config.Size or 55
     local transparency = config.BackgroundTransparency or 0.3
@@ -169,118 +166,202 @@ local function CreateSettingsPanel()
     overlay.ZIndex = 0
     overlay.Parent = gui
 
-    -- Main panel
+    -- Main panel (nhỏ hơn)
     local panel = Instance.new("Frame")
-    panel.Size = UDim2.new(0, 600, 0, 500)
+    panel.Size = UDim2.new(0, 500, 0, 450)
     panel.Position = UDim2.new(0.5, 0, 0.5, 0)
     panel.AnchorPoint = Vector2.new(0.5, 0.5)
-    panel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    panel.BackgroundTransparency = 0.1
+    panel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    panel.BackgroundTransparency = 0.05
     panel.ZIndex = 1
     panel.Parent = gui
 
-    -- Bo góc panel
     local panelCorner = Instance.new("UICorner")
-    panelCorner.CornerRadius = UDim.new(0, 15)
+    panelCorner.CornerRadius = UDim.new(0, 12)
     panelCorner.Parent = panel
 
     -- Tiêu đề
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Size = UDim2.new(1, 0, 0, 35)
     title.Position = UDim2.new(0, 0, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "⚙️ Settings Manager"
+    title.Text = "Settings"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextSize = 24
+    title.TextSize = 18
     title.Font = Enum.Font.GothamBold
     title.ZIndex = 2
     title.Parent = panel
 
     -- Nút đóng
     local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -40, 0, 5)
+    closeBtn.Size = UDim2.new(0, 25, 0, 25)
+    closeBtn.Position = UDim2.new(1, -35, 0, 5)
     closeBtn.BackgroundTransparency = 1
     closeBtn.Text = "✕"
     closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
-    closeBtn.TextSize = 20
+    closeBtn.TextSize = 16
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.ZIndex = 2
     closeBtn.Parent = panel
 
-    -- Tabs container
+    -- Tabs
     local tabsContainer = Instance.new("Frame")
-    tabsContainer.Size = UDim2.new(1, 0, 0, 35)
-    tabsContainer.Position = UDim2.new(0, 0, 0, 40)
+    tabsContainer.Size = UDim2.new(1, 0, 0, 30)
+    tabsContainer.Position = UDim2.new(0, 0, 0, 35)
     tabsContainer.BackgroundTransparency = 1
     tabsContainer.ZIndex = 2
     tabsContainer.Parent = panel
 
-    -- Tab Main
     local mainTab = Instance.new("TextButton")
     mainTab.Size = UDim2.new(0.5, 0, 1, 0)
     mainTab.Position = UDim2.new(0, 0, 0, 0)
     mainTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    mainTab.BackgroundTransparency = 0.3
-    mainTab.Text = "📋 Main (Manage)"
+    mainTab.BackgroundTransparency = 0.2
+    mainTab.Text = "Main"
     mainTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-    mainTab.TextSize = 16
+    mainTab.TextSize = 14
     mainTab.Font = Enum.Font.GothamBold
     mainTab.ZIndex = 2
     mainTab.Parent = tabsContainer
 
-    -- Tab Config
     local configTab = Instance.new("TextButton")
     configTab.Size = UDim2.new(0.5, 0, 1, 0)
     configTab.Position = UDim2.new(0.5, 0, 0, 0)
     configTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    configTab.BackgroundTransparency = 0.3
-    configTab.Text = "⚙️ Config (Save/Load)"
+    configTab.BackgroundTransparency = 0.2
+    configTab.Text = "Config"
     configTab.TextColor3 = Color3.fromRGB(200, 200, 200)
-    configTab.TextSize = 16
+    configTab.TextSize = 14
     configTab.Font = Enum.Font.GothamBold
     configTab.ZIndex = 2
     configTab.Parent = tabsContainer
 
-    -- Tab content container
+    -- Content container
     local contentContainer = Instance.new("Frame")
-    contentContainer.Size = UDim2.new(1, -20, 1, -100)
-    contentContainer.Position = UDim2.new(0, 10, 0, 80)
+    contentContainer.Size = UDim2.new(1, -20, 1, -90)
+    contentContainer.Position = UDim2.new(0, 10, 0, 70)
     contentContainer.BackgroundTransparency = 1
     contentContainer.ZIndex = 2
     contentContainer.Parent = panel
 
-    -- ===== MAIN TAB CONTENT =====
+    -- Main content
     local mainContent = Instance.new("ScrollingFrame")
     mainContent.Size = UDim2.new(1, 0, 1, 0)
     mainContent.Position = UDim2.new(0, 0, 0, 0)
     mainContent.BackgroundTransparency = 1
     mainContent.BorderSizePixel = 0
-    mainContent.ScrollBarThickness = 5
+    mainContent.ScrollBarThickness = 4
     mainContent.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
     mainContent.ZIndex = 3
     mainContent.Parent = contentContainer
 
-    -- ===== CONFIG TAB CONTENT =====
+    -- Config content
     local configContent = Instance.new("ScrollingFrame")
     configContent.Size = UDim2.new(1, 0, 1, 0)
     configContent.Position = UDim2.new(0, 0, 0, 0)
     configContent.BackgroundTransparency = 1
     configContent.BorderSizePixel = 0
-    configContent.ScrollBarThickness = 5
+    configContent.ScrollBarThickness = 4
     configContent.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
     configContent.ZIndex = 3
     configContent.Visible = false
     configContent.Parent = contentContainer
 
-    -- ===== HÀM REFRESH MAIN TAB =====
+    -- Nút thêm button (ở Main tab)
+    local addBtn = Instance.new("TextButton")
+    addBtn.Size = UDim2.new(0, 120, 0, 30)
+    addBtn.Position = UDim2.new(0.5, 0, 1, -40)
+    addBtn.AnchorPoint = Vector2.new(0.5, 0)
+    addBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+    addBtn.BackgroundTransparency = 0.2
+    addBtn.Text = "+ Add Button"
+    addBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    addBtn.TextSize = 12
+    addBtn.Font = Enum.Font.GothamBold
+    addBtn.ZIndex = 5
+    addBtn.Parent = mainContent
+
+    -- Hàm refresh Main tab
     local function RefreshMainTab()
         mainContent:ClearAllChildren()
         
+        -- Tiêu đề + nút Add
+        local header = Instance.new("Frame")
+        header.Size = UDim2.new(1, 0, 0, 35)
+        header.Position = UDim2.new(0, 0, 0, 0)
+        header.BackgroundTransparency = 1
+        header.Parent = mainContent
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+        titleLabel.Position = UDim2.new(0, 10, 0, 0)
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Text = "Buttons (" .. #allButtons .. ")"
+        titleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        titleLabel.TextSize = 14
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        titleLabel.Parent = header
+
+        local addBtn = Instance.new("TextButton")
+        addBtn.Size = UDim2.new(0, 80, 0, 25)
+        addBtn.Position = UDim2.new(1, -90, 0.5, 0)
+        addBtn.AnchorPoint = Vector2.new(0, 0.5)
+        addBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        addBtn.BackgroundTransparency = 0.2
+        addBtn.Text = "+ Add"
+        addBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        addBtn.TextSize = 12
+        addBtn.Font = Enum.Font.GothamBold
+        addBtn.ZIndex = 5
+        addBtn.Parent = header
+
+        addBtn.MouseButton1Click:Connect(function()
+            -- Mở input để nhập script
+            local input = Instance.new("TextBox")
+            input.Size = UDim2.new(0, 400, 0, 100)
+            input.Position = UDim2.new(0.5, 0, 0.5, 0)
+            input.AnchorPoint = Vector2.new(0.5, 0.5)
+            input.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            input.TextColor3 = Color3.fromRGB(255, 255, 255)
+            input.TextSize = 14
+            input.Font = Enum.Font.Gotham
+            input.PlaceholderText = "Paste your button script here..."
+            input.ZIndex = 10
+            input.Parent = gui
+
+            local inputCorner = Instance.new("UICorner")
+            inputCorner.CornerRadius = UDim.new(0, 8)
+            inputCorner.Parent = input
+
+            local confirmBtn = Instance.new("TextButton")
+            confirmBtn.Size = UDim2.new(0, 80, 0, 30)
+            confirmBtn.Position = UDim2.new(0.5, 0, 1, 10)
+            confirmBtn.AnchorPoint = Vector2.new(0.5, 0)
+            confirmBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+            confirmBtn.BackgroundTransparency = 0.2
+            confirmBtn.Text = "Run"
+            confirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            confirmBtn.TextSize = 12
+            confirmBtn.Font = Enum.Font.GothamBold
+            confirmBtn.Parent = input
+
+            confirmBtn.MouseButton1Click:Connect(function()
+                local code = input.Text
+                if code and code ~= "" then
+                    -- Chạy script được dán vào
+                    loadstring(code)()
+                end
+                input:Destroy()
+            end)
+        end)
+
+        -- Danh sách nút
+        local yOffset = 45
         for i, btnData in ipairs(allButtons) do
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 45)
-            row.Position = UDim2.new(0, 0, 0, (i-1) * 47)
+            row.Size = UDim2.new(1, 0, 0, 40)
+            row.Position = UDim2.new(0, 0, 0, yOffset + (i-1) * 42)
             row.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
             row.BackgroundTransparency = 0.5
             row.ZIndex = 4
@@ -290,15 +371,27 @@ local function CreateSettingsPanel()
             rowCorner.CornerRadius = UDim.new(0, 5)
             rowCorner.Parent = row
 
-            -- Tên nút
+            -- Icon nhỏ
+            local iconSmall = Instance.new("ImageLabel")
+            iconSmall.Size = UDim2.new(0, 20, 0, 20)
+            iconSmall.Position = UDim2.new(0, 8, 0.5, 0)
+            iconSmall.AnchorPoint = Vector2.new(0, 0.5)
+            iconSmall.BackgroundTransparency = 1
+            iconSmall.Image = btnData.Config.IconId or "rbxassetid://12232156257"
+            iconSmall.ImageColor3 = Color3.fromRGB(255, 255, 255)
+            iconSmall.ScaleType = Enum.ScaleType.Fit
+            iconSmall.ZIndex = 5
+            iconSmall.Parent = row
+
+            -- Tên
             local nameLabel = Instance.new("TextLabel")
             nameLabel.Size = UDim2.new(0.3, 0, 1, 0)
-            nameLabel.Position = UDim2.new(0, 10, 0, 0)
+            nameLabel.Position = UDim2.new(0, 35, 0, 0)
             nameLabel.BackgroundTransparency = 1
             nameLabel.Text = btnData.Name or "Button " .. i
             nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            nameLabel.TextSize = 14
-            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 12
+            nameLabel.Font = Enum.Font.Gotham
             nameLabel.TextXAlignment = Enum.TextXAlignment.Left
             nameLabel.ZIndex = 5
             nameLabel.Parent = row
@@ -306,217 +399,150 @@ local function CreateSettingsPanel()
             -- Kích thước
             local sizeLabel = Instance.new("TextLabel")
             sizeLabel.Size = UDim2.new(0.2, 0, 1, 0)
-            sizeLabel.Position = UDim2.new(0.3, 0, 0, 0)
+            sizeLabel.Position = UDim2.new(0.35, 0, 0, 0)
             sizeLabel.BackgroundTransparency = 1
-            sizeLabel.Text = "Size: " .. math.round(btnData.Button.Size.X.Offset) .. "px"
+            sizeLabel.Text = math.round(btnData.Button.Size.X.Offset) .. "px"
             sizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            sizeLabel.TextSize = 12
+            sizeLabel.TextSize = 10
             sizeLabel.Font = Enum.Font.Gotham
             sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
             sizeLabel.ZIndex = 5
             sizeLabel.Parent = row
 
-            -- Vị trí
-            local posLabel = Instance.new("TextLabel")
-            posLabel.Size = UDim2.new(0.2, 0, 1, 0)
-            posLabel.Position = UDim2.new(0.5, 0, 0, 0)
-            posLabel.BackgroundTransparency = 1
-            posLabel.Text = string.format("Pos: (%.1f, %.1f)", 
-                btnData.Button.Position.X.Scale * 100, 
-                btnData.Button.Position.Y.Scale * 100)
-            posLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            posLabel.TextSize = 12
-            posLabel.Font = Enum.Font.Gotham
-            posLabel.TextXAlignment = Enum.TextXAlignment.Left
-            posLabel.ZIndex = 5
-            posLabel.Parent = row
-
-            -- Nút ẩn/hiện
-            local toggleBtn = Instance.new("TextButton")
-            toggleBtn.Size = UDim2.new(0, 40, 0, 30)
-            toggleBtn.Position = UDim2.new(0.75, 0, 0.5, 0)
+            -- Nút ẩn/hiện (icon)
+            local toggleBtn = Instance.new("ImageButton")
+            toggleBtn.Size = UDim2.new(0, 20, 0, 20)
+            toggleBtn.Position = UDim2.new(0.65, 0, 0.5, 0)
             toggleBtn.AnchorPoint = Vector2.new(0, 0.5)
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-            toggleBtn.BackgroundTransparency = 0.2
-            toggleBtn.Text = "👁"
-            toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            toggleBtn.TextSize = 14
-            toggleBtn.Font = Enum.Font.GothamBold
+            toggleBtn.BackgroundTransparency = 1
+            toggleBtn.Image = "rbxassetid://12232156257"  -- Icon mắt
+            toggleBtn.ImageColor3 = Color3.fromRGB(255, 255, 255)
             toggleBtn.ZIndex = 5
             toggleBtn.Parent = row
 
-            -- Nút xóa
-            local deleteBtn = Instance.new("TextButton")
-            deleteBtn.Size = UDim2.new(0, 40, 0, 30)
-            deleteBtn.Position = UDim2.new(0.85, 0, 0.5, 0)
+            -- Nút xóa (icon)
+            local deleteBtn = Instance.new("ImageButton")
+            deleteBtn.Size = UDim2.new(0, 20, 0, 20)
+            deleteBtn.Position = UDim2.new(0.8, 0, 0.5, 0)
             deleteBtn.AnchorPoint = Vector2.new(0, 0.5)
-            deleteBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-            deleteBtn.BackgroundTransparency = 0.2
-            deleteBtn.Text = "🗑"
-            deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            deleteBtn.TextSize = 14
-            deleteBtn.Font = Enum.Font.GothamBold
+            deleteBtn.BackgroundTransparency = 1
+            deleteBtn.Image = "rbxassetid://12232156257"  -- Icon thùng rác
+            deleteBtn.ImageColor3 = Color3.fromRGB(255, 80, 80)
             deleteBtn.ZIndex = 5
             deleteBtn.Parent = row
 
-            -- Nút đổi tên
-            local renameBtn = Instance.new("TextButton")
-            renameBtn.Size = UDim2.new(0, 40, 0, 30)
+            -- Nút đổi tên (icon)
+            local renameBtn = Instance.new("ImageButton")
+            renameBtn.Size = UDim2.new(0, 20, 0, 20)
             renameBtn.Position = UDim2.new(0.95, 0, 0.5, 0)
             renameBtn.AnchorPoint = Vector2.new(1, 0.5)
-            renameBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 255)
-            renameBtn.BackgroundTransparency = 0.2
-            renameBtn.Text = "✏️"
-            renameBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            renameBtn.TextSize = 14
-            renameBtn.Font = Enum.Font.GothamBold
+            renameBtn.BackgroundTransparency = 1
+            renameBtn.Image = "rbxassetid://12232156257"  -- Icon bút
+            renameBtn.ImageColor3 = Color3.fromRGB(80, 80, 255)
             renameBtn.ZIndex = 5
             renameBtn.Parent = row
 
-            -- Sự kiện ẩn/hiện
             local visible = true
             toggleBtn.MouseButton1Click:Connect(function()
                 visible = not visible
                 btnData.Gui.Enabled = visible
-                toggleBtn.BackgroundColor3 = visible and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(200, 200, 200)
-                toggleBtn.Text = visible and "👁" or "🚫"
+                toggleBtn.ImageColor3 = visible and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
             end)
 
-            -- Sự kiện xóa
             deleteBtn.MouseButton1Click:Connect(function()
-                if btnData.Destroy then
-                    btnData:Destroy()
-                    RefreshMainTab()
-                end
+                btnData:Destroy()
+                RefreshMainTab()
             end)
 
-            -- Sự kiện đổi tên
             renameBtn.MouseButton1Click:Connect(function()
-                local newName = "Button_" .. os.time()  -- Tạo tên mới
-                btnData.Name = newName
-                nameLabel.Text = newName
-                -- Ở đây bạn có thể mở input box để nhập tên mới
+                local input = Instance.new("TextBox")
+                input.Size = UDim2.new(0, 200, 0, 30)
+                input.Position = UDim2.new(0.5, 0, 0.5, 0)
+                input.AnchorPoint = Vector2.new(0.5, 0.5)
+                input.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                input.TextColor3 = Color3.fromRGB(255, 255, 255)
+                input.TextSize = 14
+                input.Font = Enum.Font.Gotham
+                input.PlaceholderText = "New name..."
+                input.Text = btnData.Name or ""
+                input.ZIndex = 10
+                input.Parent = gui
+
+                local inputCorner = Instance.new("UICorner")
+                inputCorner.CornerRadius = UDim.new(0, 8)
+                inputCorner.Parent = input
+
+                input.FocusLost:Connect(function()
+                    local newName = input.Text
+                    if newName and newName ~= "" then
+                        btnData.Name = newName
+                        nameLabel.Text = newName
+                    end
+                    input:Destroy()
+                end)
             end)
         end
     end
 
-    -- ===== HÀM REFRESH CONFIG TAB =====
+    -- Hàm refresh Config tab
     local function RefreshConfigTab()
         configContent:ClearAllChildren()
         
-        -- Tiêu đề
         local titleLabel = Instance.new("TextLabel")
-        titleLabel.Size = UDim2.new(1, 0, 0, 30)
+        titleLabel.Size = UDim2.new(1, 0, 0, 25)
         titleLabel.Position = UDim2.new(0, 0, 0, 0)
         titleLabel.BackgroundTransparency = 1
-        titleLabel.Text = "📁 Button Configurations"
-        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        titleLabel.TextSize = 16
+        titleLabel.Text = "Configurations"
+        titleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        titleLabel.TextSize = 14
         titleLabel.Font = Enum.Font.GothamBold
         titleLabel.TextXAlignment = Enum.TextXAlignment.Left
         titleLabel.ZIndex = 5
         titleLabel.Parent = configContent
 
-        -- Nút Save All
-        local saveAllBtn = Instance.new("TextButton")
-        saveAllBtn.Size = UDim2.new(0, 120, 0, 30)
-        saveAllBtn.Position = UDim2.new(0, 10, 0, 35)
-        saveAllBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
-        saveAllBtn.BackgroundTransparency = 0.2
-        saveAllBtn.Text = "💾 Save All"
-        saveAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        saveAllBtn.TextSize = 14
-        saveAllBtn.Font = Enum.Font.GothamBold
-        saveAllBtn.ZIndex = 5
-        saveAllBtn.Parent = configContent
+        -- Nút Save/Load
+        local saveBtn = Instance.new("TextButton")
+        saveBtn.Size = UDim2.new(0, 80, 0, 25)
+        saveBtn.Position = UDim2.new(0, 10, 0, 30)
+        saveBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+        saveBtn.BackgroundTransparency = 0.2
+        saveBtn.Text = "Save"
+        saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        saveBtn.TextSize = 12
+        saveBtn.Font = Enum.Font.GothamBold
+        saveBtn.ZIndex = 5
+        saveBtn.Parent = configContent
 
-        -- Nút Load All
-        local loadAllBtn = Instance.new("TextButton")
-        loadAllBtn.Size = UDim2.new(0, 120, 0, 30)
-        loadAllBtn.Position = UDim2.new(0, 140, 0, 35)
-        loadAllBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
-        loadAllBtn.BackgroundTransparency = 0.2
-        loadAllBtn.Text = "📂 Load All"
-        loadAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        loadAllBtn.TextSize = 14
-        loadAllBtn.Font = Enum.Font.GothamBold
-        loadAllBtn.ZIndex = 5
-        loadAllBtn.Parent = configContent
+        local loadBtn = Instance.new("TextButton")
+        loadBtn.Size = UDim2.new(0, 80, 0, 25)
+        loadBtn.Position = UDim2.new(0, 100, 0, 30)
+        loadBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
+        loadBtn.BackgroundTransparency = 0.2
+        loadBtn.Text = "Load"
+        loadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        loadBtn.TextSize = 12
+        loadBtn.Font = Enum.Font.GothamBold
+        loadBtn.ZIndex = 5
+        loadBtn.Parent = configContent
 
-        -- Nút Auto Config
         local autoBtn = Instance.new("TextButton")
-        autoBtn.Size = UDim2.new(0, 120, 0, 30)
-        autoBtn.Position = UDim2.new(0, 270, 0, 35)
+        autoBtn.Size = UDim2.new(0, 80, 0, 25)
+        autoBtn.Position = UDim2.new(0, 190, 0, 30)
         autoBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 80)
         autoBtn.BackgroundTransparency = 0.2
-        autoBtn.Text = "🔧 Auto Config"
+        autoBtn.Text = "Auto"
         autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        autoBtn.TextSize = 14
+        autoBtn.TextSize = 12
         autoBtn.Font = Enum.Font.GothamBold
         autoBtn.ZIndex = 5
         autoBtn.Parent = configContent
 
-        -- Sự kiện Save All
-        saveAllBtn.MouseButton1Click:Connect(function()
-            savedConfigs = {}
-            for i, btnData in ipairs(allButtons) do
-                savedConfigs[btnData.Id] = {
-                    Name = btnData.Name or "Button " .. i,
-                    Position = btnData.Button.Position,
-                    Size = btnData.Button.Size,
-                    Visible = btnData.Gui.Enabled,
-                    IconId = btnData.Config.IconId,
-                    Type = btnData.Config.Type or "Floating"
-                }
-            end
-            print("✅ Saved configs:", savedConfigs)
-            -- Ở đây bạn có thể lưu vào file hoặc HttpService
-        end)
-
-        -- Sự kiện Load All
-        loadAllBtn.MouseButton1Click:Connect(function()
-            for id, config in pairs(savedConfigs) do
-                for _, btnData in ipairs(allButtons) do
-                    if btnData.Id == id then
-                        btnData.Name = config.Name
-                        btnData.Button.Position = config.Position
-                        btnData.Button.Size = config.Size
-                        btnData.Gui.Enabled = config.Visible
-                        -- Cập nhật icon nếu cần
-                        break
-                    end
-                end
-            end
-            RefreshConfigTab()
-            RefreshMainTab()
-            print("✅ Loaded configs")
-        end)
-
-        -- Sự kiện Auto Config (tự động chạy khi load game)
-        autoBtn.MouseButton1Click:Connect(function()
-            -- Lưu config
-            savedConfigs = {}
-            for i, btnData in ipairs(allButtons) do
-                savedConfigs[btnData.Id] = {
-                    Name = btnData.Name or "Button " .. i,
-                    Position = btnData.Button.Position,
-                    Size = btnData.Button.Size,
-                    Visible = btnData.Gui.Enabled,
-                    IconId = btnData.Config.IconId,
-                    Type = btnData.Config.Type or "Floating"
-                }
-            end
-            print("✅ Auto Config saved")
-            -- Lưu vào file để tự động load khi game chạy lại
-            -- Ở đây bạn có thể dùng HttpService hoặc WriteFile
-        end)
-
-        -- Danh sách config từng nút
-        local yOffset = 75
+        -- Danh sách config
+        local yOffset = 65
         for i, btnData in ipairs(allButtons) do
             local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 60)
-            row.Position = UDim2.new(0, 0, 0, yOffset + (i-1) * 65)
+            row.Size = UDim2.new(1, 0, 0, 40)
+            row.Position = UDim2.new(0, 0, 0, yOffset + (i-1) * 42)
             row.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
             row.BackgroundTransparency = 0.5
             row.ZIndex = 4
@@ -526,92 +552,46 @@ local function CreateSettingsPanel()
             rowCorner.CornerRadius = UDim.new(0, 5)
             rowCorner.Parent = row
 
-            -- ID
             local idLabel = Instance.new("TextLabel")
-            idLabel.Size = UDim2.new(0.2, 0, 0.4, 0)
-            idLabel.Position = UDim2.new(0, 10, 0, 5)
+            idLabel.Size = UDim2.new(0.2, 0, 1, 0)
+            idLabel.Position = UDim2.new(0, 8, 0, 0)
             idLabel.BackgroundTransparency = 1
-            idLabel.Text = "ID: " .. (btnData.Id or "unknown")
+            idLabel.Text = "#" .. i
             idLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            idLabel.TextSize = 12
+            idLabel.TextSize = 10
             idLabel.Font = Enum.Font.Gotham
             idLabel.TextXAlignment = Enum.TextXAlignment.Left
             idLabel.ZIndex = 5
             idLabel.Parent = row
 
-            -- Tên
             local nameLabel = Instance.new("TextLabel")
-            nameLabel.Size = UDim2.new(0.2, 0, 0.4, 0)
-            nameLabel.Position = UDim2.new(0.2, 0, 0, 5)
+            nameLabel.Size = UDim2.new(0.3, 0, 1, 0)
+            nameLabel.Position = UDim2.new(0.2, 0, 0, 0)
             nameLabel.BackgroundTransparency = 1
-            nameLabel.Text = "Name: " .. (btnData.Name or "Button " .. i)
-            nameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            nameLabel.Text = btnData.Name or "Button " .. i
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
             nameLabel.TextSize = 12
             nameLabel.Font = Enum.Font.Gotham
             nameLabel.TextXAlignment = Enum.TextXAlignment.Left
             nameLabel.ZIndex = 5
             nameLabel.Parent = row
 
-            -- Vị trí
-            local posLabel = Instance.new("TextLabel")
-            posLabel.Size = UDim2.new(0.3, 0, 0.4, 0)
-            posLabel.Position = UDim2.new(0.4, 0, 0, 5)
-            posLabel.BackgroundTransparency = 1
-            posLabel.Text = string.format("Pos: (%.2f, %.2f)", 
-                btnData.Button.Position.X.Scale, 
-                btnData.Button.Position.Y.Scale)
-            posLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            posLabel.TextSize = 12
-            posLabel.Font = Enum.Font.Gotham
-            posLabel.TextXAlignment = Enum.TextXAlignment.Left
-            posLabel.ZIndex = 5
-            posLabel.Parent = row
-
-            -- Kích thước
-            local sizeLabel = Instance.new("TextLabel")
-            sizeLabel.Size = UDim2.new(0.3, 0, 0.4, 0)
-            sizeLabel.Position = UDim2.new(0.7, 0, 0, 5)
-            sizeLabel.BackgroundTransparency = 1
-            sizeLabel.Text = "Size: " .. math.round(btnData.Button.Size.X.Offset) .. "px"
-            sizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-            sizeLabel.TextSize = 12
-            sizeLabel.Font = Enum.Font.Gotham
-            sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
-            sizeLabel.ZIndex = 5
-            sizeLabel.Parent = row
-
-            -- Nút Export từng nút
-            local exportBtn = Instance.new("TextButton")
-            exportBtn.Size = UDim2.new(0, 60, 0, 25)
-            exportBtn.Position = UDim2.new(1, -70, 0, 30)
-            exportBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 255)
-            exportBtn.BackgroundTransparency = 0.2
-            exportBtn.Text = "Export"
-            exportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            exportBtn.TextSize = 10
-            exportBtn.Font = Enum.Font.GothamBold
-            exportBtn.ZIndex = 5
-            exportBtn.Parent = row
-
-            exportBtn.MouseButton1Click:Connect(function()
-                local configData = {
-                    Id = btnData.Id,
-                    Name = btnData.Name or "Button " .. i,
-                    Position = btnData.Button.Position,
-                    Size = btnData.Button.Size,
-                    Visible = btnData.Gui.Enabled,
-                    IconId = btnData.Config.IconId,
-                    Type = btnData.Config.Type or "Floating"
-                }
-                print("📤 Exported config:", configData)
-            end)
+            local infoLabel = Instance.new("TextLabel")
+            infoLabel.Size = UDim2.new(0.5, 0, 1, 0)
+            infoLabel.Position = UDim2.new(0.5, 0, 0, 0)
+            infoLabel.BackgroundTransparency = 1
+            infoLabel.Text = math.round(btnData.Button.Size.X.Offset) .. "px | " .. btnData.Type
+            infoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            infoLabel.TextSize = 10
+            infoLabel.Font = Enum.Font.Gotham
+            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+            infoLabel.ZIndex = 5
+            infoLabel.Parent = row
         end
     end
 
-    -- ===== TAB SWITCHING =====
-    local activeTab = "main"
+    -- Tab switching
     mainTab.MouseButton1Click:Connect(function()
-        activeTab = "main"
         mainTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         configTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         mainTab.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -622,7 +602,6 @@ local function CreateSettingsPanel()
     end)
 
     configTab.MouseButton1Click:Connect(function()
-        activeTab = "config"
         configTab.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         mainTab.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         configTab.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -632,19 +611,16 @@ local function CreateSettingsPanel()
         RefreshConfigTab()
     end)
 
-    -- Close button
     closeBtn.MouseButton1Click:Connect(function()
         gui.Enabled = false
     end)
 
-    -- Click outside to close
     overlay.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             gui.Enabled = false
         end
     end)
 
-    -- Khởi tạo tab main
     RefreshMainTab()
 
     settingsPanelInstance = {
@@ -693,9 +669,9 @@ local function CreateSettingsButton()
     gui.Parent = player:WaitForChild("PlayerGui")
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 45, 0, 45)
+    btn.Size = UDim2.new(0, 40, 0, 40)
     btn.Position = UDim2.new(0.9, 0, 0.8, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 255)
+    btn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
     btn.BackgroundTransparency = 0.3
     btn.Draggable = true
     btn.Text = ""
@@ -703,7 +679,7 @@ local function CreateSettingsButton()
     btn.Parent = gui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = btn
 
     local icon = Instance.new("ImageLabel")
@@ -754,9 +730,9 @@ local function CreateAutoLockButton()
     gui.Parent = player:WaitForChild("PlayerGui")
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 55, 0, 55)
+    btn.Size = UDim2.new(0, 40, 0, 40)
     btn.Position = UDim2.new(0.9, 0, 0.9, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+    btn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
     btn.BackgroundTransparency = 0.3
     btn.Draggable = true
     btn.Text = ""
@@ -764,7 +740,7 @@ local function CreateAutoLockButton()
     btn.Parent = gui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = btn
 
     local icon = Instance.new("ImageLabel")
@@ -772,7 +748,7 @@ local function CreateAutoLockButton()
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"
+    icon.Image = "rbxassetid://12232156257"  -- Icon mở khóa
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
@@ -798,8 +774,8 @@ local function CreateAutoLockButton()
     table.insert(connections, btn.MouseButton1Click:Connect(function()
         state = not state
         if state then
-            btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-            icon.Image = "rbxassetid://12232156257"
+            btn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+            icon.Image = "rbxassetid://12232156257"  -- Icon khóa
             isLocked = true
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
@@ -810,8 +786,8 @@ local function CreateAutoLockButton()
                 end
             end
         else
-            btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-            icon.Image = "rbxassetid://12232156257"
+            btn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+            icon.Image = "rbxassetid://12232156257"  -- Icon mở khóa
             isLocked = false
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
@@ -831,7 +807,7 @@ local function CreateAutoLockButton()
         SetState = function(newState)
             state = newState
             if state then
-                btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+                btn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
                 icon.Image = "rbxassetid://12232156257"
                 isLocked = true
                 for _, btnData in ipairs(allButtons) do
@@ -843,7 +819,7 @@ local function CreateAutoLockButton()
                     end
                 end
             else
-                btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+                btn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
                 icon.Image = "rbxassetid://12232156257"
                 isLocked = false
                 for _, btnData in ipairs(allButtons) do
@@ -859,7 +835,7 @@ local function CreateAutoLockButton()
         Toggle = function()
             state = not state
             if state then
-                btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+                btn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
                 icon.Image = "rbxassetid://12232156257"
                 isLocked = true
                 for _, btnData in ipairs(allButtons) do
@@ -871,7 +847,7 @@ local function CreateAutoLockButton()
                     end
                 end
             else
-                btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
+                btn.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
                 icon.Image = "rbxassetid://12232156257"
                 isLocked = false
                 for _, btnData in ipairs(allButtons) do
@@ -897,8 +873,8 @@ local function CreateAutoLockButton()
     return lockButtonInstance
 end
 
--- ===== PUBLIC API - Nút thường =====
-function NoirButtonFactory.CreateFloatingButton(config)
+-- ===== PUBLIC API =====
+function NoirCore.CreateFloatingButton(config)
     if not config.Position then error("config.Position is required!") end
     if not config.IconId then error("config.IconId is required!") end
     if not config.Callback then error("config.Callback is required!") end
@@ -922,10 +898,9 @@ function NoirButtonFactory.CreateFloatingButton(config)
         Name = config.Name or "Button " .. tostring(buttonCounter),
         Config = config,
         Type = "Floating",
-        Destroy = nil  -- Sẽ gán sau
+        Destroy = nil
     }
 
-    -- Hàm Destroy riêng
     local function DestroySelf()
         for i, data in ipairs(allButtons) do
             if data == btnData then
@@ -987,8 +962,7 @@ function NoirButtonFactory.CreateFloatingButton(config)
     }
 end
 
--- ===== PUBLIC API - Nút Toggle =====
-function NoirButtonFactory.CreateToggleButton(config)
+function NoirCore.CreateToggleButton(config)
     if not config.Position then error("config.Position is required!") end
     if not config.IconId then error("config.IconId is required!") end
     if not config.OnCallback then error("config.OnCallback is required!") end
@@ -1173,33 +1147,24 @@ function NoirButtonFactory.CreateToggleButton(config)
     }
 end
 
--- ===== TỰ ĐỘNG KÍCH HOẠT =====
+-- ===== INIT =====
 local function Init()
-    if isModuleLoaded then return end
-    isModuleLoaded = true
+    if isLoaded then return end
+    isLoaded = true
     
     local player = Players.LocalPlayer
     if player then
         player:WaitForChild("PlayerGui")
         CreateAutoLockButton()
         CreateSettingsButton()
-        
-        -- Auto load config nếu có
-        if savedConfigs and next(savedConfigs) then
-            -- Ở đây bạn có thể tự động load config
-            print("🔄 Auto loading saved configs...")
-        end
     end
 end
 
 Init()
 
--- ===== PUBLIC API =====
-function NoirButtonFactory.GetLockState()
-    return isLocked
-end
-
-function NoirButtonFactory.SetLockState(state)
+-- ===== EXPORT =====
+function NoirCore.GetLockState() return isLocked end
+function NoirCore.SetLockState(state)
     if lockButtonInstance then
         lockButtonInstance.SetState(state)
     else
@@ -1215,7 +1180,7 @@ function NoirButtonFactory.SetLockState(state)
     end
 end
 
-function NoirButtonFactory.DestroyAllButtons()
+function NoirCore.DestroyAllButtons()
     for _, btnData in ipairs(allButtons) do
         if btnData and btnData.Destroy then
             btnData:Destroy()
@@ -1236,60 +1201,15 @@ function NoirButtonFactory.DestroyAllButtons()
     end
 end
 
-function NoirButtonFactory.GetLockButton()
-    return lockButtonInstance
-end
-
-function NoirButtonFactory.GetSettingsButton()
-    return settingsButtonInstance
-end
-
-function NoirButtonFactory.GetSettingsPanel()
-    return settingsPanelInstance
-end
-
-function NoirButtonFactory.GetAllButtons()
-    return allButtons
-end
-
-function NoirButtonFactory.OpenSettings()
+function NoirCore.GetLockButton() return lockButtonInstance end
+function NoirCore.GetSettingsButton() return settingsButtonInstance end
+function NoirCore.GetSettingsPanel() return settingsPanelInstance end
+function NoirCore.GetAllButtons() return allButtons end
+function NoirCore.OpenSettings()
     local panel = CreateSettingsPanel()
     if panel then
         panel:Show()
     end
 end
 
-function NoirButtonFactory.SaveAllConfigs()
-    savedConfigs = {}
-    for i, btnData in ipairs(allButtons) do
-        savedConfigs[btnData.Id] = {
-            Name = btnData.Name or "Button " .. i,
-            Position = btnData.Button.Position,
-            Size = btnData.Button.Size,
-            Visible = btnData.Gui.Enabled,
-            IconId = btnData.Config.IconId,
-            Type = btnData.Type or "Floating"
-        }
-    end
-    return savedConfigs
-end
-
-function NoirButtonFactory.LoadAllConfigs(configs)
-    savedConfigs = configs or savedConfigs
-    for id, config in pairs(savedConfigs) do
-        for _, btnData in ipairs(allButtons) do
-            if btnData.Id == id then
-                btnData.Name = config.Name
-                btnData.Button.Position = config.Position
-                btnData.Button.Size = config.Size
-                btnData.Gui.Enabled = config.Visible
-                break
-            end
-        end
-    end
-    if settingsPanelInstance then
-        settingsPanelInstance:Refresh()
-    end
-end
-
-return NoirButtonFactory
+return NoirCore
