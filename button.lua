@@ -1,6 +1,5 @@
 -- ==========================================================
--- NoirButtonFactory v1.8
--- Author: Noir (thêm auto-save vị trí & kích thước)
+-- NoirButtonFactory v1.9 (Client Safe - Dùng Attributes)
 -- ==========================================================
 
 local NoirButtonFactory = {}
@@ -8,51 +7,38 @@ local NoirButtonFactory = {}
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local DataStoreService = game:GetService("DataStoreService")
 
--- ===== DATA STORAGE =====
-local function GetButtonDataStore()
-    local player = Players.LocalPlayer
-    if not player then return nil end
-    
-    local userId = player.UserId
-    local dataStore = DataStoreService:GetDataStore("NoirButtonData_" .. userId)
-    return dataStore
-end
-
+-- ===== CLIENT STORAGE (Dùng Attributes) =====
 local function SaveButtonPosition(name, position, size)
-    local dataStore = GetButtonDataStore()
-    if not dataStore then return end
+    local player = Players.LocalPlayer
+    if not player then return end
     
-    local success, err = pcall(function()
-        local data = dataStore:GetAsync(name) or {}
-        data.Position = {
+    -- Tạo bảng dữ liệu
+    local data = {
+        Position = {
             X = position.X.Scale,
             Y = position.Y.Scale,
             OffsetX = position.X.Offset,
             OffsetY = position.Y.Offset
-        }
-        data.Size = {
+        },
+        Size = {
             Scale = size.X.Scale,
             Offset = size.X.Offset
         }
-        dataStore:SetAsync(name, data)
-    end)
+    }
     
-    if not success then
-        warn("Failed to save button position: " .. err)
-    end
+    -- Lưu vào Attribute của Player
+    local key = "NoirButton_" .. name
+    player:SetAttribute(key, data)
 end
 
 local function LoadButtonPosition(name)
-    local dataStore = GetButtonDataStore()
-    if not dataStore then return nil end
+    local player = Players.LocalPlayer
+    if not player then return nil end
     
-    local success, data = pcall(function()
-        return dataStore:GetAsync(name)
-    end)
-    
-    if success and data then
+    local key = "NoirButton_" .. name
+    local data = player:GetAttribute(key)
+    if data then
         return data
     end
     return nil
@@ -120,7 +106,7 @@ local function CreateResizeHandle(btn)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isResizing = false
             handle.BackgroundTransparency = 0.5
-            -- Khi kết thúc resize, lưu kích thước mới
+            -- Lưu khi kết thúc resize
             local btnData = allButtons[btn.Name]
             if btnData and btnData.SaveData then
                 btnData:SaveData()
@@ -153,7 +139,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local buttonId = config.Name or "NoirButton_" .. tostring(buttonIdCounter)
     buttonIdCounter = buttonIdCounter + 1
 
-    -- Load vị trí đã lưu (nếu có)
+    -- Load vị trí đã lưu
     local savedData = LoadButtonPosition(buttonId)
     local position = savedData and UDim2.new(
         savedData.Position.X, savedData.Position.OffsetX,
@@ -173,7 +159,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     btn.Draggable = draggable and not isLocked
     btn.Text = ""
     btn.ZIndex = 1
-    btn.Name = buttonId  -- Đặt tên để nhận diện khi save
+    btn.Name = buttonId
     btn.Parent = parent
 
     local corner = Instance.new("UICorner")
@@ -191,7 +177,6 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.ZIndex = 10
     icon.Parent = btn
 
-    -- Tạo resize handle
     local resizeHandle = nil
     if showResize then
         resizeHandle = CreateResizeHandle(btn)
@@ -206,19 +191,11 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local oldPosition = btn.Position
     btn:GetPropertyChangedSignal("Position"):Connect(function()
         if btn.Draggable and not isLocked then
-            -- Lưu khi vị trí thay đổi
-            task.wait(0.5)  -- Chờ 0.5s sau khi dừng drag để tránh save quá nhiều
+            task.wait(0.5)
             if btn.Position ~= oldPosition then
                 SaveData()
                 oldPosition = btn.Position
             end
-        end
-    end)
-
-    -- Lưu khi size thay đổi (do resize handle đã lưu rồi, nhưng thêm vào để chắc chắn)
-    btn:GetPropertyChangedSignal("Size"):Connect(function()
-        if not isLocked and resizeHandle then
-            -- Resize handle đã lưu khi kết thúc drag
         end
     end)
 
@@ -292,12 +269,10 @@ local function CreateAutoLockButton()
     icon.ZIndex = 10
     icon.Parent = btn
 
-    -- Hàm lưu vị trí lock button
     local function SaveLockButtonData()
         SaveButtonPosition("NoirLockButton", btn.Position, btn.Size)
     end
 
-    -- Lưu vị trí khi drag
     local oldLockPos = btn.Position
     btn:GetPropertyChangedSignal("Position"):Connect(function()
         task.wait(0.5)
@@ -338,7 +313,6 @@ local function CreateAutoLockButton()
                     end
                 end
             end
-            print("🔒 Locked all buttons")
         else
             btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
             icon.Image = "rbxassetid://12232156257"
@@ -351,7 +325,6 @@ local function CreateAutoLockButton()
                     end
                 end
             end
-            print("🔓 Unlocked all buttons")
         end
     end))
 
@@ -471,13 +444,13 @@ function NoirButtonFactory.CreateFloatingButton(config)
         SetPosition = function(newPos) 
             if btn then 
                 btn.Position = newPos
-                SaveData()  -- Lưu ngay khi set vị trí thủ công
+                SaveData()
             end
         end,
         SetSize = function(newSize) 
             if btn then 
                 btn.Size = UDim2.new(0, newSize, 0, newSize)
-                SaveData()  -- Lưu ngay khi set kích thước thủ công
+                SaveData()
             end
         end,
         SetIcon = function(newIconId)
@@ -501,7 +474,7 @@ function NoirButtonFactory.CreateFloatingButton(config)
             end
             return 0
         end,
-        SaveData = SaveData,  -- Cho phép gọi thủ công
+        SaveData = SaveData,
     }
 end
 
@@ -523,7 +496,6 @@ function NoirButtonFactory.CreateToggleButton(config)
     gui.DisplayOrder = 999999999
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Load vị trí đã lưu
     local savedData = LoadButtonPosition(name)
     local position = savedData and UDim2.new(
         savedData.Position.X, savedData.Position.OffsetX,
@@ -561,12 +533,10 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.ZIndex = 10
     icon.Parent = btn
 
-    -- Hàm lưu dữ liệu
     local function SaveData()
         SaveButtonPosition(name, btn.Position, btn.Size)
     end
 
-    -- Lưu khi drag
     local oldTogglePos = btn.Position
     btn:GetPropertyChangedSignal("Position"):Connect(function()
         if btn.Draggable and not isLocked then
@@ -578,12 +548,10 @@ function NoirButtonFactory.CreateToggleButton(config)
         end
     end)
 
-    -- Tạo resize handle
     local showResize = config.ShowResize ~= false
     local resizeHandle = nil
     if showResize then
         resizeHandle = CreateResizeHandle(btn)
-        -- Resize handle đã tự lưu khi kết thúc drag
     end
 
     local state = defaultState
