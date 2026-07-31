@@ -28,7 +28,7 @@ local function CreateTooltip(btn, config)
     -- Tạo tooltip container
     local tooltip = Instance.new("Frame")
     tooltip.Size = UDim2.new(0, 0, 0, 0)
-    tooltip.Position = UDim2.new(0, -10, 0, -20)
+    tooltip.Position = UDim2.new(0, 0, 0, -40)
     tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
     tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     tooltip.BackgroundTransparency = 0.7
