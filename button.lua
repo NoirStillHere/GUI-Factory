@@ -1,5 +1,7 @@
 -- ==========================================================
--- NoirButtonFactory v1.9 (Client Safe - Dùng Attributes)
+-- NoirButtonFactory v1.8 (LocalStorage Version - Full)
+-- Author: Noir
+-- Description: Tạo nút nổi, toggle, lock/unlock, resize, auto-save vị trí & kích thước
 -- ==========================================================
 
 local NoirButtonFactory = {}
@@ -7,14 +9,20 @@ local NoirButtonFactory = {}
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local LocalStorageService = game:GetService("LocalStorageService")
 
--- ===== CLIENT STORAGE (Dùng Attributes) =====
+-- ===== LOCAL STORAGE (Lưu file trên máy Client) =====
+local function GetButtonStorage()
+    local storage = LocalStorageService:GetJsonStorage("NoirButtonData")
+    return storage
+end
+
 local function SaveButtonPosition(name, position, size)
-    local player = Players.LocalPlayer
-    if not player then return end
+    local storage = GetButtonStorage()
+    if not storage then return end
     
-    -- Tạo bảng dữ liệu
-    local data = {
+    local data = storage:GetData() or {}
+    data[name] = {
         Position = {
             X = position.X.Scale,
             Y = position.Y.Scale,
@@ -26,20 +34,16 @@ local function SaveButtonPosition(name, position, size)
             Offset = size.X.Offset
         }
     }
-    
-    -- Lưu vào Attribute của Player
-    local key = "NoirButton_" .. name
-    player:SetAttribute(key, data)
+    storage:SetData(data)
 end
 
 local function LoadButtonPosition(name)
-    local player = Players.LocalPlayer
-    if not player then return nil end
+    local storage = GetButtonStorage()
+    if not storage then return nil end
     
-    local key = "NoirButton_" .. name
-    local data = player:GetAttribute(key)
-    if data then
-        return data
+    local data = storage:GetData()
+    if data and data[name] then
+        return data[name]
     end
     return nil
 end
@@ -70,7 +74,7 @@ local function CreateResizeHandle(btn)
     icon.Size = UDim2.new(1, 0, 1, 0)
     icon.Position = UDim2.new(0, 0, 0, 0)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"
+    icon.Image = "rbxassetid://12232156257"  -- Thay icon mũi tên chéo nếu có
     icon.ImageColor3 = Color3.fromRGB(0, 0, 0)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 21
@@ -106,7 +110,7 @@ local function CreateResizeHandle(btn)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isResizing = false
             handle.BackgroundTransparency = 0.5
-            -- Lưu khi kết thúc resize
+            -- Lưu kích thước mới sau khi resize
             local btnData = allButtons[btn.Name]
             if btnData and btnData.SaveData then
                 btnData:SaveData()
@@ -139,7 +143,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local buttonId = config.Name or "NoirButton_" .. tostring(buttonIdCounter)
     buttonIdCounter = buttonIdCounter + 1
 
-    -- Load vị trí đã lưu
+    -- Load vị trí đã lưu (nếu có)
     local savedData = LoadButtonPosition(buttonId)
     local position = savedData and UDim2.new(
         savedData.Position.X, savedData.Position.OffsetX,
@@ -177,6 +181,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.ZIndex = 10
     icon.Parent = btn
 
+    -- Resize handle
     local resizeHandle = nil
     if showResize then
         resizeHandle = CreateResizeHandle(btn)
@@ -187,7 +192,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
         SaveButtonPosition(buttonId, btn.Position, btn.Size)
     end
 
-    -- Lưu khi drag kết thúc
+    -- Lưu khi drag
     local oldPosition = btn.Position
     btn:GetPropertyChangedSignal("Position"):Connect(function()
         if btn.Draggable and not isLocked then
@@ -263,12 +268,13 @@ local function CreateAutoLockButton()
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"
+    icon.Image = "rbxassetid://12232156257"  -- Icon unlock
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
     icon.Parent = btn
 
+    -- Hàm lưu vị trí lock button
     local function SaveLockButtonData()
         SaveButtonPosition("NoirLockButton", btn.Position, btn.Size)
     end
@@ -303,7 +309,7 @@ local function CreateAutoLockButton()
         state = not state
         if state then
             btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-            icon.Image = "rbxassetid://12232156257"
+            icon.Image = "rbxassetid://12232156257"  -- Icon lock
             isLocked = true
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
@@ -313,9 +319,10 @@ local function CreateAutoLockButton()
                     end
                 end
             end
+            print("🔒 Locked all buttons")
         else
             btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-            icon.Image = "rbxassetid://12232156257"
+            icon.Image = "rbxassetid://12232156257"  -- Icon unlock
             isLocked = false
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
@@ -325,6 +332,7 @@ local function CreateAutoLockButton()
                     end
                 end
             end
+            print("🔓 Unlocked all buttons")
         end
     end))
 
@@ -496,6 +504,7 @@ function NoirButtonFactory.CreateToggleButton(config)
     gui.DisplayOrder = 999999999
     gui.Parent = player:WaitForChild("PlayerGui")
 
+    -- Load vị trí đã lưu
     local savedData = LoadButtonPosition(name)
     local position = savedData and UDim2.new(
         savedData.Position.X, savedData.Position.OffsetX,
@@ -533,10 +542,12 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.ZIndex = 10
     icon.Parent = btn
 
+    -- Hàm lưu dữ liệu
     local function SaveData()
         SaveButtonPosition(name, btn.Position, btn.Size)
     end
 
+    -- Lưu khi drag
     local oldTogglePos = btn.Position
     btn:GetPropertyChangedSignal("Position"):Connect(function()
         if btn.Draggable and not isLocked then
@@ -548,6 +559,7 @@ function NoirButtonFactory.CreateToggleButton(config)
         end
     end)
 
+    -- Resize handle
     local showResize = config.ShowResize ~= false
     local resizeHandle = nil
     if showResize then
