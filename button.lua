@@ -1,5 +1,5 @@
 -- ==========================================================
--- NoirButtonFactory v2.0 (Full)
+-- NoirButtonFactory v2.1 (Singleton Lock)
 -- Author: Noir
 -- ==========================================================
 
@@ -9,11 +9,13 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
--- ===== INTERNAL STATE =====
-local isLocked = false
-local allButtons = {}
-local lockButtonInstance = nil
-local isModuleLoaded = false
+-- ===== SHARED STATE (dùng chung cho mọi lần require) =====
+local SharedState = {
+    isLocked = false,
+    allButtons = {},
+    lockButtonInstance = nil,
+    isModuleLoaded = false,
+}
 
 -- ===== TOOLTIP HELPER =====
 local function CreateTooltip(btn, config)
@@ -26,7 +28,7 @@ local function CreateTooltip(btn, config)
     -- Tạo tooltip container
     local tooltip = Instance.new("Frame")
     tooltip.Size = UDim2.new(0, 0, 0, 0)
-    tooltip.Position = UDim2.new(0, 0, 0, -40)
+    tooltip.Position = UDim2.new(0, -10, 0, -20)
     tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
     tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     tooltip.BackgroundTransparency = 0.7
@@ -38,14 +40,12 @@ local function CreateTooltip(btn, config)
     corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = tooltip
 
-    -- Layout để xếp icon + text ngang hàng
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = Enum.FillDirection.Horizontal
     layout.Padding = UDim.new(0, 6)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = tooltip
 
-    -- Icon (nếu có)
     local iconImg = nil
     if tooltipIcon then
         iconImg = Instance.new("ImageLabel")
@@ -59,7 +59,6 @@ local function CreateTooltip(btn, config)
         iconImg.Parent = tooltip
     end
 
-    -- Text label
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(0, 0, 0, 20)
     label.BackgroundTransparency = 1
@@ -73,7 +72,6 @@ local function CreateTooltip(btn, config)
     label.LayoutOrder = 2
     label.Parent = tooltip
 
-    -- Hàm cập nhật nội dung
     local function UpdateTooltipContent()
         local finalText = tooltipText
         
@@ -95,11 +93,9 @@ local function CreateTooltip(btn, config)
         
         label.Text = finalText
         
-        -- Auto-size text label
         local textBounds = label.TextBounds
         label.Size = UDim2.new(0, textBounds.X + 4, 0, textBounds.Y + 4)
         
-        -- Auto-size tooltip dựa trên tổng kích thước
         local totalWidth = textBounds.X + 16
         local totalHeight = math.max(textBounds.Y + 8, 24)
         
@@ -113,7 +109,6 @@ local function CreateTooltip(btn, config)
         tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
     end
 
-    -- Cập nhật tooltip khi hover
     btn.MouseEnter:Connect(function()
         if config.ShowTooltip ~= false then
             UpdateTooltipContent()
@@ -126,7 +121,6 @@ local function CreateTooltip(btn, config)
         tooltip.Visible = false
     end)
 
-    -- Nếu có ShowPosition, cập nhật khi nút di chuyển
     if showPosition then
         btn:GetPropertyChangedSignal("Position"):Connect(function()
             if tooltip.Visible then
@@ -135,7 +129,6 @@ local function CreateTooltip(btn, config)
         end)
     end
 
-    -- Trả về API để có thể cập nhật sau
     return {
         Instance = tooltip,
         Label = label,
@@ -153,86 +146,12 @@ local function CreateTooltip(btn, config)
     }
 end
 
--- ===== RESIZE HANDLE =====
-local function CreateResizeHandle(btn)
-    local handle = Instance.new("Frame")
-    handle.Size = UDim2.new(0, 12, 0, 12)
-    handle.Position = UDim2.new(1, -12, 1, -12)
-    handle.AnchorPoint = Vector2.new(0, 0)
-    handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    handle.BackgroundTransparency = 0.5
-    handle.ZIndex = 20
-    handle.Parent = btn
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 3)
-    corner.Parent = handle
-
-    local icon = Instance.new("ImageLabel")
-    icon.Size = UDim2.new(1, 0, 1, 0)
-    icon.Position = UDim2.new(0, 0, 0, 0)
-    icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"
-    icon.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    icon.ScaleType = Enum.ScaleType.Fit
-    icon.ZIndex = 21
-    icon.Parent = handle
-
-    local isResizing = false
-    local startMousePos = nil
-    local startSize = nil
-    local minSize = 30
-
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if isLocked then return end
-            isResizing = true
-            startMousePos = input.Position
-            startSize = btn.Size
-            handle.BackgroundTransparency = 0.2
-        end
-    end)
-
-    handle.InputChanged:Connect(function(input)
-        if isResizing and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - startMousePos
-            local newSize = UDim2.new(
-                0, math.max(startSize.X.Offset + delta.X, minSize),
-                0, math.max(startSize.Y.Offset + delta.Y, minSize)
-            )
-            btn.Size = newSize
-        end
-    end)
-
-    handle.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isResizing = false
-            handle.BackgroundTransparency = 0.5
-        end
-    end)
-
-    handle.MouseEnter:Connect(function()
-        if not isLocked then
-            handle.BackgroundTransparency = 0.2
-        end
-    end)
-    
-    handle.MouseLeave:Connect(function()
-        if not isResizing then
-            handle.BackgroundTransparency = 0.5
-        end
-    end)
-
-    return handle
-end
-
 -- ===== INTERNAL FUNCTION =====
 local function CreateBaseButton(parent, config, iconId, callback)
     local size = config.Size or 55
     local transparency = config.BackgroundTransparency or 0.3
     local cornerRadius = config.CornerRadius or 10
     local draggable = config.Draggable ~= false
-    local showResize = config.ShowResize ~= false
     local showPosition = config.ShowPosition or false
 
     local btn = Instance.new("TextButton")
@@ -240,7 +159,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     btn.Position = config.Position
     btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     btn.BackgroundTransparency = transparency
-    btn.Draggable = draggable and not isLocked
+    btn.Draggable = draggable and not SharedState.isLocked
     btn.Text = ""
     btn.ZIndex = 1
     btn.Parent = parent
@@ -260,13 +179,6 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.ZIndex = 10
     icon.Parent = btn
 
-    -- Tạo resize handle
-    local resizeHandle = nil
-    if showResize then
-        resizeHandle = CreateResizeHandle(btn)
-    end
-
-    -- Tạo tooltip
     local tooltipData = nil
     if config.TooltipText or config.TooltipIcon or showPosition then
         tooltipData = CreateTooltip(btn, {
@@ -293,16 +205,33 @@ local function CreateBaseButton(parent, config, iconId, callback)
     table.insert(connections, btn.MouseLeave:Connect(OnLeave))
     table.insert(connections, btn.MouseButton1Click:Connect(callback))
 
-    return btn, connections, resizeHandle, tooltipData
+    return btn, connections, tooltipData
 end
 
--- ===== TỰ ĐỘNG TẠO LOCK BUTTON =====
+-- ===== TỰ ĐỘNG TẠO LOCK BUTTON (chỉ tạo 1 lần duy nhất) =====
 local function CreateAutoLockButton()
-    if lockButtonInstance then return lockButtonInstance end
+    -- Nếu đã tồn tại, trả về luôn
+    if SharedState.lockButtonInstance then return SharedState.lockButtonInstance end
 
     local player = Players.LocalPlayer
     if not player then return nil end
 
+    -- Kiểm tra xem Lock button đã tồn tại trong PlayerGui chưa
+    local existingGui = player:WaitForChild("PlayerGui"):FindFirstChild("NoirLockButton")
+    if existingGui then
+        -- Nếu đã có, lấy lại instance
+        local btn = existingGui:FindFirstChildWhichIsA("TextButton")
+        if btn then
+            SharedState.lockButtonInstance = {
+                Button = btn,
+                Gui = existingGui,
+                -- Các API khác sẽ được khởi tạo sau...
+            }
+            return SharedState.lockButtonInstance
+        end
+    end
+
+    -- Chưa có, tạo mới
     local gui = Instance.new("ScreenGui")
     gui.Name = "NoirLockButton"
     gui.ResetOnSpawn = false
@@ -329,16 +258,15 @@ local function CreateAutoLockButton()
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"  -- Icon unlock
+    icon.Image = "rbxassetid://10747366027"
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
     icon.Parent = btn
 
-    -- Tạo tooltip với icon
     local tooltipData = CreateTooltip(btn, {
-        TooltipText = "🔓 Unlock - Click to lock",
-        TooltipIcon = "rbxassetid://12232156257",  -- Icon unlock
+        TooltipText = "Unlock - Click to lock",
+        TooltipIcon = "rbxassetid://10747366027",
         ShowTooltip = true,
     })
 
@@ -362,46 +290,35 @@ local function CreateAutoLockButton()
     table.insert(connections, btn.MouseButton1Click:Connect(function()
         state = not state
         if state then
-            -- Lock
             btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-            icon.Image = "rbxassetid://12232156257"  -- Icon lock
-            isLocked = true
-            tooltipData.SetText("🔒 Locked - Click to unlock")
-            tooltipData.SetIcon("rbxassetid://12232156257")  -- Icon lock
+            icon.Image = "rbxassetid://12232156257"
+            SharedState.isLocked = true
+            tooltipData.SetText("Locked - Click to unlock")
+            tooltipData.SetIcon("rbxassetid://10723434711")
             
-            for _, btnData in ipairs(allButtons) do
+            for _, btnData in ipairs(SharedState.allButtons) do
                 if btnData and btnData.Button then
                     btnData.Button.Draggable = false
-                    if btnData.ResizeHandle then
-                        btnData.ResizeHandle.Visible = false
-                    end
                 end
             end
-            print("🔒 Locked all buttons")
         else
-            -- Unlock
             btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-            icon.Image = "rbxassetid://12232156257"  -- Icon unlock
-            isLocked = false
-            tooltipData.SetText("🔓 Unlock - Click to lock")
-            tooltipData.SetIcon("rbxassetid://12232156257")  -- Icon unlock
+            icon.Image = "rbxassetid://12232156257"
+            SharedState.isLocked = false
+            tooltipData.SetText("Unlock - Click to lock")
+            tooltipData.SetIcon("rbxassetid://10747366027")
             
-            for _, btnData in ipairs(allButtons) do
+            for _, btnData in ipairs(SharedState.allButtons) do
                 if btnData and btnData.Button then
                     btnData.Button.Draggable = true
-                    if btnData.ResizeHandle then
-                        btnData.ResizeHandle.Visible = true
-                    end
                 end
             end
-            print("🔓 Unlocked all buttons")
         end
     end))
 
-    -- Set tooltip ban đầu
     tooltipData.Update()
 
-    lockButtonInstance = {
+    SharedState.lockButtonInstance = {
         Button = btn,
         Gui = gui,
         GetState = function() return state end,
@@ -410,29 +327,23 @@ local function CreateAutoLockButton()
             if state then
                 btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
                 icon.Image = "rbxassetid://12232156257"
-                isLocked = true
-                tooltipData.SetText("🔒 Locked - Click to unlock")
-                tooltipData.SetIcon("rbxassetid://12232156257")
-                for _, btnData in ipairs(allButtons) do
+                SharedState.isLocked = true
+                tooltipData.SetText("Locked - Click to unlock")
+                tooltipData.SetIcon("rbxassetid://10723434711")
+                for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = false
-                        if btnData.ResizeHandle then
-                            btnData.ResizeHandle.Visible = false
-                        end
                     end
                 end
             else
                 btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
                 icon.Image = "rbxassetid://12232156257"
-                isLocked = false
-                tooltipData.SetText("🔓 Unlock - Click to lock")
-                tooltipData.SetIcon("rbxassetid://12232156257")
-                for _, btnData in ipairs(allButtons) do
+                SharedState.isLocked = false
+                tooltipData.SetText("Unlock - Click to lock")
+                tooltipData.SetIcon("rbxassetid://10747366027")
+                for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = true
-                        if btnData.ResizeHandle then
-                            btnData.ResizeHandle.Visible = true
-                        end
                     end
                 end
             end
@@ -442,29 +353,23 @@ local function CreateAutoLockButton()
             if state then
                 btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
                 icon.Image = "rbxassetid://12232156257"
-                isLocked = true
-                tooltipData.SetText("🔒 Locked - Click to unlock")
-                tooltipData.SetIcon("rbxassetid://12232156257")
-                for _, btnData in ipairs(allButtons) do
+                SharedState.isLocked = true
+                tooltipData.SetText("Locked - Click to unlock")
+                tooltipData.SetIcon("rbxassetid://10723434711")
+                for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = false
-                        if btnData.ResizeHandle then
-                            btnData.ResizeHandle.Visible = false
-                        end
                     end
                 end
             else
                 btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
                 icon.Image = "rbxassetid://12232156257"
-                isLocked = false
-                tooltipData.SetText("🔓 Unlock - Click to lock")
-                tooltipData.SetIcon("rbxassetid://12232156257")
-                for _, btnData in ipairs(allButtons) do
+                SharedState.isLocked = false
+                tooltipData.SetText("Unlock - Click to lock")
+                tooltipData.SetIcon("rbxassetid://10747366027")
+                for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = true
-                        if btnData.ResizeHandle then
-                            btnData.ResizeHandle.Visible = true
-                        end
                     end
                 end
             end
@@ -472,14 +377,14 @@ local function CreateAutoLockButton()
         Destroy = function()
             for _, con in ipairs(connections) do con:Disconnect() end
             if gui and gui.Parent then gui:Destroy() end
-            lockButtonInstance = nil
+            SharedState.lockButtonInstance = nil
         end,
         SetVisible = function(state) if gui then gui.Enabled = state end end,
         SetPosition = function(newPos) if btn then btn.Position = newPos end end,
         SetSize = function(newSize) if btn then btn.Size = UDim2.new(0, newSize, 0, newSize) end end,
     }
 
-    return lockButtonInstance
+    return SharedState.lockButtonInstance
 end
 
 -- ===== PUBLIC API - Nút thường =====
@@ -497,23 +402,22 @@ function NoirButtonFactory.CreateFloatingButton(config)
     gui.DisplayOrder = 999999999
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    local btn, connections, resizeHandle, tooltipData = CreateBaseButton(gui, config, config.IconId, config.Callback)
+    local btn, connections, tooltipData = CreateBaseButton(gui, config, config.IconId, config.Callback)
     
     local btnData = { 
         Button = btn, 
         Gui = gui,
-        ResizeHandle = resizeHandle,
         TooltipData = tooltipData
     }
-    table.insert(allButtons, btnData)
+    table.insert(SharedState.allButtons, btnData)
 
     return {
         Button = btn,
         Gui = gui,
         Destroy = function()
-            for i, data in ipairs(allButtons) do
+            for i, data in ipairs(SharedState.allButtons) do
                 if data == btnData then
-                    table.remove(allButtons, i)
+                    table.remove(SharedState.allButtons, i)
                     break
                 end
             end
@@ -527,22 +431,11 @@ function NoirButtonFactory.CreateFloatingButton(config)
             local icon = btn:FindFirstChildOfClass("ImageLabel")
             if icon then icon.Image = newIconId end
         end,
-        IsLocked = function() return isLocked end,
+        IsLocked = function() return SharedState.isLocked end,
         SetDraggable = function(state)
             if btn then
-                btn.Draggable = state and not isLocked
+                btn.Draggable = state and not SharedState.isLocked
             end
-        end,
-        SetResizeable = function(state)
-            if resizeHandle then
-                resizeHandle.Visible = state and not isLocked
-            end
-        end,
-        GetSize = function()
-            if btn then
-                return btn.Size.X.Offset
-            end
-            return 0
         end,
         SetTooltip = function(newText, newIconId)
             if tooltipData then
@@ -552,7 +445,7 @@ function NoirButtonFactory.CreateFloatingButton(config)
         end,
         ShowTooltip = function(state)
             if tooltipData and tooltipData.Instance then
-                tooltipData.Instance.Visible = state and not isLocked
+                tooltipData.Instance.Visible = state and not SharedState.isLocked
             end
         end,
         GetPosition = function()
@@ -587,7 +480,7 @@ function NoirButtonFactory.CreateToggleButton(config)
     btn.Position = config.Position
     btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     btn.BackgroundTransparency = config.BackgroundTransparency or 0.3
-    btn.Draggable = (config.Draggable ~= false) and not isLocked
+    btn.Draggable = (config.Draggable ~= false) and not SharedState.isLocked
     btn.Text = ""
     btn.ZIndex = 1
     btn.Parent = gui
@@ -607,14 +500,6 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.ZIndex = 10
     icon.Parent = btn
 
-    -- Tạo resize handle
-    local showResize = config.ShowResize ~= false
-    local resizeHandle = nil
-    if showResize then
-        resizeHandle = CreateResizeHandle(btn)
-    end
-
-    -- Tạo tooltip
     local showPosition = config.ShowPosition or false
     local tooltipData = nil
     if config.TooltipText or config.TooltipIcon or showPosition then
@@ -666,10 +551,9 @@ function NoirButtonFactory.CreateToggleButton(config)
     local btnData = { 
         Button = btn, 
         Gui = gui,
-        ResizeHandle = resizeHandle,
         TooltipData = tooltipData
     }
-    table.insert(allButtons, btnData)
+    table.insert(SharedState.allButtons, btnData)
 
     return {
         Button = btn,
@@ -704,9 +588,9 @@ function NoirButtonFactory.CreateToggleButton(config)
             end
         end,
         Destroy = function()
-            for i, data in ipairs(allButtons) do
+            for i, data in ipairs(SharedState.allButtons) do
                 if data == btnData then
-                    table.remove(allButtons, i)
+                    table.remove(SharedState.allButtons, i)
                     break
                 end
             end
@@ -716,22 +600,11 @@ function NoirButtonFactory.CreateToggleButton(config)
         SetVisible = function(state) if gui then gui.Enabled = state end end,
         SetPosition = function(newPos) if btn then btn.Position = newPos end end,
         SetSize = function(newSize) if btn then btn.Size = UDim2.new(0, newSize, 0, newSize) end end,
-        IsLocked = function() return isLocked end,
+        IsLocked = function() return SharedState.isLocked end,
         SetDraggable = function(state)
             if btn then
-                btn.Draggable = state and not isLocked
+                btn.Draggable = state and not SharedState.isLocked
             end
-        end,
-        SetResizeable = function(state)
-            if resizeHandle then
-                resizeHandle.Visible = state and not isLocked
-            end
-        end,
-        GetSize = function()
-            if btn then
-                return btn.Size.X.Offset
-            end
-            return 0
         end,
         SetTooltip = function(newText, newIconId)
             if tooltipData then
@@ -741,7 +614,7 @@ function NoirButtonFactory.CreateToggleButton(config)
         end,
         ShowTooltip = function(state)
             if tooltipData and tooltipData.Instance then
-                tooltipData.Instance.Visible = state and not isLocked
+                tooltipData.Instance.Visible = state and not SharedState.isLocked
             end
         end,
         GetPosition = function()
@@ -753,10 +626,10 @@ function NoirButtonFactory.CreateToggleButton(config)
     }
 end
 
--- ===== TỰ ĐỘNG KÍCH HOẠT =====
+-- ===== TỰ ĐỘNG KÍCH HOẠT (chỉ tạo Lock 1 lần) =====
 local function Init()
-    if isModuleLoaded then return end
-    isModuleLoaded = true
+    if SharedState.isModuleLoaded then return end
+    SharedState.isModuleLoaded = true
     
     local player = Players.LocalPlayer
     if player then
@@ -769,22 +642,19 @@ Init()
 
 -- ===== PUBLIC API =====
 function NoirButtonFactory.GetLockState()
-    return isLocked
+    return SharedState.isLocked
 end
 
 function NoirButtonFactory.SetLockState(state)
-    if lockButtonInstance then
-        lockButtonInstance.SetState(state)
+    if SharedState.lockButtonInstance then
+        SharedState.lockButtonInstance.SetState(state)
     else
-        isLocked = state
-        for _, btnData in ipairs(allButtons) do
+        SharedState.isLocked = state
+        for _, btnData in ipairs(SharedState.allButtons) do
             if btnData and btnData.Button then
-                btnData.Button.Draggable = not isLocked
-                if btnData.ResizeHandle then
-                    btnData.ResizeHandle.Visible = not isLocked
-                end
+                btnData.Button.Draggable = not SharedState.isLocked
                 if btnData.TooltipData and btnData.TooltipData.Instance then
-                    btnData.TooltipData.Instance.Visible = not isLocked
+                    btnData.TooltipData.Instance.Visible = not SharedState.isLocked
                 end
             end
         end
@@ -792,20 +662,20 @@ function NoirButtonFactory.SetLockState(state)
 end
 
 function NoirButtonFactory.DestroyAllButtons()
-    for _, btnData in ipairs(allButtons) do
+    for _, btnData in ipairs(SharedState.allButtons) do
         if btnData and btnData.Destroy then
             btnData:Destroy()
         end
     end
-    allButtons = {}
-    if lockButtonInstance then
-        lockButtonInstance:Destroy()
-        lockButtonInstance = nil
+    SharedState.allButtons = {}
+    if SharedState.lockButtonInstance then
+        SharedState.lockButtonInstance:Destroy()
+        SharedState.lockButtonInstance = nil
     end
 end
 
 function NoirButtonFactory.GetLockButton()
-    return lockButtonInstance
+    return SharedState.lockButtonInstance
 end
 
 return NoirButtonFactory
