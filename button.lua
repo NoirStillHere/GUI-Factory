@@ -1,6 +1,6 @@
 -- ==========================================================
--- NoirButtonFactory v1.8
--- Author: Noir (thêm helper tooltip khi hover)
+-- NoirButtonFactory v1.9
+-- Author: Noir (thêm option hiển thị vị trí nút trong tooltip)
 -- ==========================================================
 
 local NoirButtonFactory = {}
@@ -17,12 +17,12 @@ local isModuleLoaded = false
 
 -- ===== TOOLTIP HELPER =====
 local function CreateTooltip(btn, text, config)
-    if not text or text == "" then return nil end
+    if not text and not config.ShowPosition then return nil end
     
     -- Tạo tooltip container
     local tooltip = Instance.new("Frame")
-    tooltip.Size = UDim2.new(0, 0, 0, 0)  -- Sẽ auto-size
-    tooltip.Position = UDim2.new(0, 0, 0, -40)  -- Nằm phía trên nút
+    tooltip.Size = UDim2.new(0, 0, 0, 0)
+    tooltip.Position = UDim2.new(0, 0, 0, -40)
     tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
     tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     tooltip.BackgroundTransparency = 0.7
@@ -30,18 +30,17 @@ local function CreateTooltip(btn, text, config)
     tooltip.Visible = false
     tooltip.Parent = btn
 
-    -- Bo góc
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = tooltip
 
     -- Text label
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 10, 1, 6)  -- Padding nhẹ
+    label.Size = UDim2.new(1, 10, 1, 6)
     label.Position = UDim2.new(0.5, 0, 0.5, 0)
     label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.BackgroundTransparency = 1
-    label.Text = text
+    label.Text = text or ""
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextSize = 14
     label.Font = Enum.Font.GothamMedium
@@ -49,21 +48,40 @@ local function CreateTooltip(btn, text, config)
     label.ZIndex = 101
     label.Parent = tooltip
 
-    -- Auto-size tooltip dựa trên text
-    tooltip.Size = UDim2.new(0, label.TextBounds.X + 20, 0, label.TextBounds.Y + 12)
-    
-    -- Position tooltip phía trên nút
-    local buttonSize = btn.Size.X.Offset
-    local tooltipWidth = label.TextBounds.X + 20
-    local offsetX = (tooltipWidth - buttonSize) / 2
-    tooltip.Position = UDim2.new(0.5, 0, 0, -tooltip.Size.Y.Offset - 10)
-    tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
-
     -- Hover effect
+    local function UpdateTooltipContent()
+        if config.ShowPosition then
+            local pos = btn.Position
+            local x = math.floor(pos.X.Scale * 1000) / 1000
+            local y = math.floor(pos.Y.Scale * 1000) / 1000
+            local xOffset = math.floor(pos.X.Offset)
+            local yOffset = math.floor(pos.Y.Offset)
+            
+            local posText = string.format("X: %.3f + %d | Y: %.3f + %d", x, xOffset, y, yOffset)
+            
+            -- Nếu có text gốc, thêm vào
+            if text and text ~= "" then
+                label.Text = text .. "\n" .. posText
+            else
+                label.Text = posText
+            end
+        else
+            label.Text = text or ""
+        end
+        
+        -- Auto-size tooltip
+        tooltip.Size = UDim2.new(0, label.TextBounds.X + 20, 0, label.TextBounds.Y + 12)
+        local buttonSize = btn.Size.X.Offset
+        local tooltipWidth = label.TextBounds.X + 20
+        tooltip.Position = UDim2.new(0.5, 0, 0, -tooltip.Size.Y.Offset - 10)
+        tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
+    end
+
+    -- Cập nhật tooltip khi hover
     btn.MouseEnter:Connect(function()
         if config and config.ShowTooltip ~= false then
+            UpdateTooltipContent()
             tooltip.Visible = true
-            -- Animation fade in
             tooltip.BackgroundTransparency = 0.7
         end
     end)
@@ -71,6 +89,15 @@ local function CreateTooltip(btn, text, config)
     btn.MouseLeave:Connect(function()
         tooltip.Visible = false
     end)
+
+    -- Nếu có ShowPosition, cập nhật khi nút di chuyển
+    if config.ShowPosition then
+        btn:GetPropertyChangedSignal("Position"):Connect(function()
+            if tooltip.Visible then
+                UpdateTooltipContent()
+            end
+        end)
+    end
 
     return tooltip
 end
@@ -94,7 +121,7 @@ local function CreateResizeHandle(btn)
     icon.Size = UDim2.new(1, 0, 1, 0)
     icon.Position = UDim2.new(0, 0, 0, 0)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"  -- Icon resize
+    icon.Image = "rbxassetid://12232156257"
     icon.ImageColor3 = Color3.fromRGB(0, 0, 0)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 21
@@ -156,6 +183,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local draggable = config.Draggable ~= false
     local showResize = config.ShowResize ~= false
     local tooltipText = config.TooltipText or ""
+    local showPosition = config.ShowPosition or false
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, size, 0, size)
@@ -192,6 +220,8 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local tooltip = nil
     if tooltipText and tooltipText ~= "" then
         tooltip = CreateTooltip(btn, tooltipText, config)
+    elseif showPosition then
+        tooltip = CreateTooltip(btn, "", { ShowPosition = true, ShowTooltip = true })
     end
 
     local connections = {}
@@ -246,7 +276,7 @@ local function CreateAutoLockButton()
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://12232156257"  -- Icon unlock
+    icon.Image = "rbxassetid://12232156257"
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
@@ -276,7 +306,7 @@ local function CreateAutoLockButton()
         state = not state
         if state then
             btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-            icon.Image = "rbxassetid://12232156257"  -- Icon lock
+            icon.Image = "rbxassetid://12232156257"
             isLocked = true
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
@@ -289,7 +319,7 @@ local function CreateAutoLockButton()
             print("🔒 Locked all buttons")
         else
             btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-            icon.Image = "rbxassetid://12232156257"  -- Icon unlock
+            icon.Image = "rbxassetid://12232156257"
             isLocked = false
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
@@ -446,7 +476,6 @@ function NoirButtonFactory.CreateFloatingButton(config)
                     tooltip.Size = UDim2.new(0, label.TextBounds.X + 20, 0, label.TextBounds.Y + 12)
                     local buttonSize = btn.Size.X.Offset
                     local tooltipWidth = label.TextBounds.X + 20
-                    local offsetX = (tooltipWidth - buttonSize) / 2
                     tooltip.Position = UDim2.new(0.5, 0, 0, -tooltip.Size.Y.Offset - 10)
                 end
             end
@@ -455,6 +484,12 @@ function NoirButtonFactory.CreateFloatingButton(config)
             if tooltip then
                 tooltip.Visible = state and not isLocked
             end
+        end,
+        GetPosition = function()
+            if btn then
+                return btn.Position
+            end
+            return UDim2.new(0, 0, 0, 0)
         end,
     }
 end
@@ -511,9 +546,12 @@ function NoirButtonFactory.CreateToggleButton(config)
 
     -- Tạo tooltip
     local tooltipText = config.TooltipText or ""
+    local showPosition = config.ShowPosition or false
     local tooltip = nil
     if tooltipText and tooltipText ~= "" then
         tooltip = CreateTooltip(btn, tooltipText, config)
+    elseif showPosition then
+        tooltip = CreateTooltip(btn, "", { ShowPosition = true, ShowTooltip = true })
     end
 
     local state = defaultState
@@ -631,7 +669,6 @@ function NoirButtonFactory.CreateToggleButton(config)
                     tooltip.Size = UDim2.new(0, label.TextBounds.X + 20, 0, label.TextBounds.Y + 12)
                     local buttonSize = btn.Size.X.Offset
                     local tooltipWidth = label.TextBounds.X + 20
-                    local offsetX = (tooltipWidth - buttonSize) / 2
                     tooltip.Position = UDim2.new(0.5, 0, 0, -tooltip.Size.Y.Offset - 10)
                 end
             end
@@ -640,6 +677,12 @@ function NoirButtonFactory.CreateToggleButton(config)
             if tooltip then
                 tooltip.Visible = state and not isLocked
             end
+        end,
+        GetPosition = function()
+            if btn then
+                return btn.Position
+            end
+            return UDim2.new(0, 0, 0, 0)
         end,
     }
 end
