@@ -11,7 +11,7 @@ local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
 -- ===== CẤU HÌNH GITHUB =====
-local GITHUB_RAW_URL = "https://raw.githubusercontent.com/Noir/NoirUI/main/Icons.lua"  -- <-- Thay URL của bạn
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/NoirStillHere/GUI-Factory/refs/heads/main/Icons.lua"  -- <-- Thay URL của bạn
 local FALLBACK_ICONS = {  -- Fallback nếu không tải được từ GitHub
     ['settings'] = "rbxassetid://14007344336",
     ['lock'] = "rbxassetid://10723434711",
