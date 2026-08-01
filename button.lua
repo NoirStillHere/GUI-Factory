@@ -1,5 +1,5 @@
 -- ==========================================================
--- NoirButtonFactory v2.1 (Singleton Lock)
+-- NoirButtonFactory v2.3 (GitHub Icons Loader)
 -- Author: Noir
 -- ==========================================================
 
@@ -8,8 +8,107 @@ local NoirButtonFactory = {}
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 
--- ===== SHARED STATE (dùng chung cho mọi lần require) =====
+-- ===== CẤU HÌNH GITHUB =====
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/Noir/NoirUI/main/Icons.lua"  -- <-- Thay URL của bạn
+local FALLBACK_ICONS = {  -- Fallback nếu không tải được từ GitHub
+    ['settings'] = "rbxassetid://14007344336",
+    ['lock'] = "rbxassetid://10723434711",
+    ['unlock'] = "rbxassetid://10747366027",
+    ['home'] = "rbxassetid://10723407389",
+    ['user'] = "rbxassetid://10747373176",
+    -- Thêm các icon fallback cần thiết
+}
+
+-- ===== LOAD ICONS TỪ GITHUB =====
+local Icons = nil
+local isLoading = false
+local loadCallbacks = {}
+
+local function LoadIconsFromGitHub()
+    if Icons ~= nil then return Icons end  -- Đã load rồi
+    if isLoading then 
+        -- Nếu đang load, chờ đến khi xong
+        return nil
+    end
+    
+    isLoading = true
+    
+    -- Tạo task tải từ GitHub
+    task.spawn(function()
+        local success, result = pcall(function()
+            return HttpService:GetAsync(GITHUB_RAW_URL)
+        end)
+        
+        if success then
+            local successLoad, loadedIcons = pcall(function()
+                -- Chuyển string thành table
+                return loadstring(result)()
+            end)
+            
+            if successLoad and type(loadedIcons) == "table" then
+                Icons = loadedIcons
+                print("✅ Loaded icons from GitHub")
+            else
+                Icons = FALLBACK_ICONS
+                print("⚠️ Failed to parse icons from GitHub, using fallback")
+            end
+        else
+            Icons = FALLBACK_ICONS
+            print("⚠️ Failed to load icons from GitHub, using fallback")
+        end
+        
+        isLoading = false
+        
+        -- Gọi tất cả callback đang chờ
+        for _, callback in ipairs(loadCallbacks) do
+            callback(Icons)
+        end
+        loadCallbacks = {}
+    end)
+    
+    return nil  -- Trả về nil vì chưa load xong
+end
+
+-- Hàm lấy icon ID từ tên
+local function GetIconId(iconName)
+    if not iconName then return nil end
+    
+    -- Nếu đã là ID đầy đủ, trả về luôn
+    if string.match(iconName, "^rbxassetid://") then
+        return iconName
+    end
+    
+    -- Nếu icon chưa load, load ngay
+    if Icons == nil then
+        LoadIconsFromGitHub()
+        -- Trong lần đầu gọi, có thể chưa có icon, sẽ dùng fallback tạm
+        local lowerName = iconName:lower()
+        return FALLBACK_ICONS[lowerName] or FALLBACK_ICONS[iconName] or nil
+    end
+    
+    -- Đã có icons, lấy từ bảng
+    local lowerName = iconName:lower()
+    return Icons[lowerName] or Icons[iconName] or nil
+end
+
+-- Hàm chờ icon load xong (cho trường hợp cần chắc chắn)
+local function WaitForIcons(callback)
+    if Icons ~= nil then
+        callback(Icons)
+        return
+    end
+    
+    if isLoading then
+        table.insert(loadCallbacks, callback)
+    else
+        LoadIconsFromGitHub()
+        table.insert(loadCallbacks, callback)
+    end
+end
+
+-- ===== SHARED STATE =====
 local SharedState = {
     isLocked = false,
     allButtons = {},
@@ -25,7 +124,6 @@ local function CreateTooltip(btn, config)
     
     if not tooltipText and not tooltipIcon and not showPosition then return nil end
 
-    -- Tạo tooltip container
     local tooltip = Instance.new("Frame")
     tooltip.Size = UDim2.new(0, 0, 0, 0)
     tooltip.Position = UDim2.new(0, 0, 0, -40)
@@ -48,15 +146,18 @@ local function CreateTooltip(btn, config)
 
     local iconImg = nil
     if tooltipIcon then
-        iconImg = Instance.new("ImageLabel")
-        iconImg.Size = UDim2.new(0, 20, 0, 20)
-        iconImg.BackgroundTransparency = 1
-        iconImg.Image = tooltipIcon
-        iconImg.ImageColor3 = Color3.fromRGB(255, 255, 255)
-        iconImg.ScaleType = Enum.ScaleType.Fit
-        iconImg.ZIndex = 101
-        iconImg.LayoutOrder = 1
-        iconImg.Parent = tooltip
+        local iconId = GetIconId(tooltipIcon)
+        if iconId then
+            iconImg = Instance.new("ImageLabel")
+            iconImg.Size = UDim2.new(0, 20, 0, 20)
+            iconImg.BackgroundTransparency = 1
+            iconImg.Image = iconId
+            iconImg.ImageColor3 = Color3.fromRGB(255, 255, 255)
+            iconImg.ScaleType = Enum.ScaleType.Fit
+            iconImg.ZIndex = 101
+            iconImg.LayoutOrder = 1
+            iconImg.Parent = tooltip
+        end
     end
 
     local label = Instance.new("TextLabel")
@@ -140,7 +241,10 @@ local function CreateTooltip(btn, config)
         end,
         SetIcon = function(newIconId)
             if iconImg then
-                iconImg.Image = newIconId
+                local id = GetIconId(newIconId)
+                if id then
+                    iconImg.Image = id
+                end
             end
         end,
     }
@@ -153,6 +257,9 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local cornerRadius = config.CornerRadius or 10
     local draggable = config.Draggable ~= false
     local showPosition = config.ShowPosition or false
+
+    -- Lấy icon ID từ tên hoặc ID đầy đủ
+    local finalIconId = GetIconId(iconId) or iconId  -- Fallback nếu không tìm thấy
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, size, 0, size)
@@ -173,7 +280,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = iconId
+    icon.Image = finalIconId or "rbxassetid://14007344336"  -- Fallback icon settings
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
@@ -208,24 +315,21 @@ local function CreateBaseButton(parent, config, iconId, callback)
     return btn, connections, tooltipData
 end
 
--- ===== TỰ ĐỘNG TẠO LOCK BUTTON (chỉ tạo 1 lần duy nhất) =====
+-- ===== TỰ ĐỘNG TẠO LOCK BUTTON =====
 local function CreateAutoLockButton()
-    -- Nếu đã tồn tại, trả về luôn
     if SharedState.lockButtonInstance then return SharedState.lockButtonInstance end
 
     local player = Players.LocalPlayer
     if not player then return nil end
 
-    -- Kiểm tra xem Lock button đã tồn tại trong PlayerGui chưa
+    -- Kiểm tra xem Lock button đã tồn tại chưa
     local existingGui = player:WaitForChild("PlayerGui"):FindFirstChild("NoirLockButton")
     if existingGui then
-        -- Nếu đã có, lấy lại instance
         local btn = existingGui:FindFirstChildWhichIsA("TextButton")
         if btn then
             SharedState.lockButtonInstance = {
                 Button = btn,
                 Gui = existingGui,
-                -- Các API khác sẽ được khởi tạo sau...
             }
             return SharedState.lockButtonInstance
         end
@@ -253,20 +357,24 @@ local function CreateAutoLockButton()
     corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = btn
 
+    -- Dùng icon từ GetIconId
+    local unlockIconId = GetIconId("unlock") or "rbxassetid://10747366027"
+    local lockIconId = GetIconId("lock") or "rbxassetid://10723434711"
+
     local icon = Instance.new("ImageLabel")
     icon.Size = UDim2.new(0.6, 0, 0.6, 0)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = "rbxassetid://10747366027"
+    icon.Image = unlockIconId
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
     icon.Parent = btn
 
     local tooltipData = CreateTooltip(btn, {
-        TooltipText = "Unlock - Click to lock",
-        TooltipIcon = "rbxassetid://10747366027",
+        TooltipText = "🔓 Unlock - Click to lock",
+        TooltipIcon = "unlock",
         ShowTooltip = true,
     })
 
@@ -290,29 +398,33 @@ local function CreateAutoLockButton()
     table.insert(connections, btn.MouseButton1Click:Connect(function()
         state = not state
         if state then
+            -- Lock
             btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-            icon.Image = "rbxassetid://12232156257"
+            icon.Image = lockIconId
             SharedState.isLocked = true
-            tooltipData.SetText("Locked - Click to unlock")
-            tooltipData.SetIcon("rbxassetid://10723434711")
+            tooltipData.SetText("🔒 Locked - Click to unlock")
+            tooltipData.SetIcon("lock")
             
             for _, btnData in ipairs(SharedState.allButtons) do
                 if btnData and btnData.Button then
                     btnData.Button.Draggable = false
                 end
             end
+            print("🔒 Locked all buttons")
         else
+            -- Unlock
             btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-            icon.Image = "rbxassetid://12232156257"
+            icon.Image = unlockIconId
             SharedState.isLocked = false
-            tooltipData.SetText("Unlock - Click to lock")
-            tooltipData.SetIcon("rbxassetid://10747366027")
+            tooltipData.SetText("🔓 Unlock - Click to lock")
+            tooltipData.SetIcon("unlock")
             
             for _, btnData in ipairs(SharedState.allButtons) do
                 if btnData and btnData.Button then
                     btnData.Button.Draggable = true
                 end
             end
+            print("🔓 Unlocked all buttons")
         end
     end))
 
@@ -326,10 +438,10 @@ local function CreateAutoLockButton()
             state = newState
             if state then
                 btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-                icon.Image = "rbxassetid://12232156257"
+                icon.Image = lockIconId
                 SharedState.isLocked = true
-                tooltipData.SetText("Locked - Click to unlock")
-                tooltipData.SetIcon("rbxassetid://10723434711")
+                tooltipData.SetText("🔒 Locked - Click to unlock")
+                tooltipData.SetIcon("lock")
                 for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = false
@@ -337,10 +449,10 @@ local function CreateAutoLockButton()
                 end
             else
                 btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-                icon.Image = "rbxassetid://12232156257"
+                icon.Image = unlockIconId
                 SharedState.isLocked = false
-                tooltipData.SetText("Unlock - Click to lock")
-                tooltipData.SetIcon("rbxassetid://10747366027")
+                tooltipData.SetText("🔓 Unlock - Click to lock")
+                tooltipData.SetIcon("unlock")
                 for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = true
@@ -352,10 +464,10 @@ local function CreateAutoLockButton()
             state = not state
             if state then
                 btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
-                icon.Image = "rbxassetid://12232156257"
+                icon.Image = lockIconId
                 SharedState.isLocked = true
-                tooltipData.SetText("Locked - Click to unlock")
-                tooltipData.SetIcon("rbxassetid://10723434711")
+                tooltipData.SetText("🔒 Locked - Click to unlock")
+                tooltipData.SetIcon("lock")
                 for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = false
@@ -363,10 +475,10 @@ local function CreateAutoLockButton()
                 end
             else
                 btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-                icon.Image = "rbxassetid://12232156257"
+                icon.Image = unlockIconId
                 SharedState.isLocked = false
-                tooltipData.SetText("Unlock - Click to lock")
-                tooltipData.SetIcon("rbxassetid://10747366027")
+                tooltipData.SetText("🔓 Unlock - Click to lock")
+                tooltipData.SetIcon("unlock")
                 for _, btnData in ipairs(SharedState.allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = true
@@ -429,7 +541,10 @@ function NoirButtonFactory.CreateFloatingButton(config)
         SetSize = function(newSize) if btn then btn.Size = UDim2.new(0, newSize, 0, newSize) end end,
         SetIcon = function(newIconId)
             local icon = btn:FindFirstChildOfClass("ImageLabel")
-            if icon then icon.Image = newIconId end
+            if icon then
+                local id = GetIconId(newIconId) or newIconId
+                if id then icon.Image = id end
+            end
         end,
         IsLocked = function() return SharedState.isLocked end,
         SetDraggable = function(state)
@@ -494,7 +609,7 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = config.IconId
+    icon.Image = GetIconId(config.IconId) or config.IconId
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
@@ -532,20 +647,20 @@ function NoirButtonFactory.CreateToggleButton(config)
         state = not state
         if state then
             if config.OnColor then btn.BackgroundColor3 = config.OnColor end
-            if config.OnIconId then icon.Image = config.OnIconId end
+            if config.OnIconId then icon.Image = GetIconId(config.OnIconId) or config.OnIconId end
             config.OnCallback()
         else
             if config.OffColor then btn.BackgroundColor3 = config.OffColor
             elseif config.OnColor then btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end
-            if config.OffIconId then icon.Image = config.OffIconId
-            elseif config.OnIconId then icon.Image = config.IconId end
+            if config.OffIconId then icon.Image = GetIconId(config.OffIconId) or config.OffIconId
+            elseif config.OnIconId then icon.Image = GetIconId(config.IconId) or config.IconId end
             config.OffCallback()
         end
     end))
 
     if defaultState then
         if config.OnColor then btn.BackgroundColor3 = config.OnColor end
-        if config.OnIconId then icon.Image = config.OnIconId end
+        if config.OnIconId then icon.Image = GetIconId(config.OnIconId) or config.OnIconId end
     end
 
     local btnData = { 
@@ -563,13 +678,13 @@ function NoirButtonFactory.CreateToggleButton(config)
             state = newState
             if state then
                 if config.OnColor then btn.BackgroundColor3 = config.OnColor end
-                if config.OnIconId then icon.Image = config.OnIconId end
+                if config.OnIconId then icon.Image = GetIconId(config.OnIconId) or config.OnIconId end
                 config.OnCallback()
             else
                 if config.OffColor then btn.BackgroundColor3 = config.OffColor
                 elseif config.OnColor then btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end
-                if config.OffIconId then icon.Image = config.OffIconId
-                elseif config.OnIconId then icon.Image = config.IconId end
+                if config.OffIconId then icon.Image = GetIconId(config.OffIconId) or config.OffIconId
+                elseif config.OnIconId then icon.Image = GetIconId(config.IconId) or config.IconId end
                 config.OffCallback()
             end
         end,
@@ -577,13 +692,13 @@ function NoirButtonFactory.CreateToggleButton(config)
             state = not state
             if state then
                 if config.OnColor then btn.BackgroundColor3 = config.OnColor end
-                if config.OnIconId then icon.Image = config.OnIconId end
+                if config.OnIconId then icon.Image = GetIconId(config.OnIconId) or config.OnIconId end
                 config.OnCallback()
             else
                 if config.OffColor then btn.BackgroundColor3 = config.OffColor
                 elseif config.OnColor then btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0) end
-                if config.OffIconId then icon.Image = config.OffIconId
-                elseif config.OnIconId then icon.Image = config.IconId end
+                if config.OffIconId then icon.Image = GetIconId(config.OffIconId) or config.OffIconId
+                elseif config.OnIconId then icon.Image = GetIconId(config.IconId) or config.IconId end
                 config.OffCallback()
             end
         end,
@@ -626,7 +741,7 @@ function NoirButtonFactory.CreateToggleButton(config)
     }
 end
 
--- ===== TỰ ĐỘNG KÍCH HOẠT (chỉ tạo Lock 1 lần) =====
+-- ===== TỰ ĐỘNG KÍCH HOẠT =====
 local function Init()
     if SharedState.isModuleLoaded then return end
     SharedState.isModuleLoaded = true
@@ -636,6 +751,9 @@ local function Init()
         player:WaitForChild("PlayerGui")
         CreateAutoLockButton()
     end
+    
+    -- Bắt đầu tải icon từ GitHub
+    LoadIconsFromGitHub()
 end
 
 Init()
@@ -676,6 +794,14 @@ end
 
 function NoirButtonFactory.GetLockButton()
     return SharedState.lockButtonInstance
+end
+
+function NoirButtonFactory.GetIcon(iconName)
+    return GetIconId(iconName)
+end
+
+function NoirButtonFactory.WaitForIcons(callback)
+    WaitForIcons(callback)
 end
 
 return NoirButtonFactory
