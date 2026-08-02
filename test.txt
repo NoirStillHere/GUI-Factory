@@ -1,5 +1,5 @@
 -- ==========================================================
--- NoirButtonFactory v2.0 (No Resize)
+-- NoirButtonFactory v2.0 (Full)
 -- Author: Noir
 -- ==========================================================
 
@@ -153,12 +153,86 @@ local function CreateTooltip(btn, config)
     }
 end
 
+-- ===== RESIZE HANDLE =====
+local function CreateResizeHandle(btn)
+    local handle = Instance.new("Frame")
+    handle.Size = UDim2.new(0, 12, 0, 12)
+    handle.Position = UDim2.new(1, -12, 1, -12)
+    handle.AnchorPoint = Vector2.new(0, 0)
+    handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    handle.BackgroundTransparency = 0.5
+    handle.ZIndex = 20
+    handle.Parent = btn
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 3)
+    corner.Parent = handle
+
+    local icon = Instance.new("ImageLabel")
+    icon.Size = UDim2.new(1, 0, 1, 0)
+    icon.Position = UDim2.new(0, 0, 0, 0)
+    icon.BackgroundTransparency = 1
+    icon.Image = "rbxassetid://12232156257"
+    icon.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    icon.ScaleType = Enum.ScaleType.Fit
+    icon.ZIndex = 21
+    icon.Parent = handle
+
+    local isResizing = false
+    local startMousePos = nil
+    local startSize = nil
+    local minSize = 30
+
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if isLocked then return end
+            isResizing = true
+            startMousePos = input.Position
+            startSize = btn.Size
+            handle.BackgroundTransparency = 0.2
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if isResizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - startMousePos
+            local newSize = UDim2.new(
+                0, math.max(startSize.X.Offset + delta.X, minSize),
+                0, math.max(startSize.Y.Offset + delta.Y, minSize)
+            )
+            btn.Size = newSize
+        end
+    end)
+
+    handle.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isResizing = false
+            handle.BackgroundTransparency = 0.5
+        end
+    end)
+
+    handle.MouseEnter:Connect(function()
+        if not isLocked then
+            handle.BackgroundTransparency = 0.2
+        end
+    end)
+    
+    handle.MouseLeave:Connect(function()
+        if not isResizing then
+            handle.BackgroundTransparency = 0.5
+        end
+    end)
+
+    return handle
+end
+
 -- ===== INTERNAL FUNCTION =====
 local function CreateBaseButton(parent, config, iconId, callback)
     local size = config.Size or 55
     local transparency = config.BackgroundTransparency or 0.3
     local cornerRadius = config.CornerRadius or 10
     local draggable = config.Draggable ~= false
+    local showResize = config.ShowResize ~= false
     local showPosition = config.ShowPosition or false
 
     local btn = Instance.new("TextButton")
@@ -185,6 +259,12 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
     icon.Parent = btn
+
+    -- Tạo resize handle
+    local resizeHandle = nil
+    if showResize then
+        resizeHandle = CreateResizeHandle(btn)
+    end
 
     -- Tạo tooltip
     local tooltipData = nil
@@ -213,7 +293,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     table.insert(connections, btn.MouseLeave:Connect(OnLeave))
     table.insert(connections, btn.MouseButton1Click:Connect(callback))
 
-    return btn, connections, tooltipData
+    return btn, connections, resizeHandle, tooltipData
 end
 
 -- ===== TỰ ĐỘNG TẠO LOCK BUTTON =====
@@ -292,6 +372,9 @@ local function CreateAutoLockButton()
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
                     btnData.Button.Draggable = false
+                    if btnData.ResizeHandle then
+                        btnData.ResizeHandle.Visible = false
+                    end
                 end
             end
             print("🔒 Locked all buttons")
@@ -306,6 +389,9 @@ local function CreateAutoLockButton()
             for _, btnData in ipairs(allButtons) do
                 if btnData and btnData.Button then
                     btnData.Button.Draggable = true
+                    if btnData.ResizeHandle then
+                        btnData.ResizeHandle.Visible = true
+                    end
                 end
             end
             print("🔓 Unlocked all buttons")
@@ -330,6 +416,9 @@ local function CreateAutoLockButton()
                 for _, btnData in ipairs(allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = false
+                        if btnData.ResizeHandle then
+                            btnData.ResizeHandle.Visible = false
+                        end
                     end
                 end
             else
@@ -341,6 +430,9 @@ local function CreateAutoLockButton()
                 for _, btnData in ipairs(allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = true
+                        if btnData.ResizeHandle then
+                            btnData.ResizeHandle.Visible = true
+                        end
                     end
                 end
             end
@@ -356,6 +448,9 @@ local function CreateAutoLockButton()
                 for _, btnData in ipairs(allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = false
+                        if btnData.ResizeHandle then
+                            btnData.ResizeHandle.Visible = false
+                        end
                     end
                 end
             else
@@ -367,6 +462,9 @@ local function CreateAutoLockButton()
                 for _, btnData in ipairs(allButtons) do
                     if btnData and btnData.Button then
                         btnData.Button.Draggable = true
+                        if btnData.ResizeHandle then
+                            btnData.ResizeHandle.Visible = true
+                        end
                     end
                 end
             end
@@ -399,11 +497,12 @@ function NoirButtonFactory.CreateFloatingButton(config)
     gui.DisplayOrder = 999999999
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    local btn, connections, tooltipData = CreateBaseButton(gui, config, config.IconId, config.Callback)
+    local btn, connections, resizeHandle, tooltipData = CreateBaseButton(gui, config, config.IconId, config.Callback)
     
     local btnData = { 
         Button = btn, 
         Gui = gui,
+        ResizeHandle = resizeHandle,
         TooltipData = tooltipData
     }
     table.insert(allButtons, btnData)
@@ -433,6 +532,17 @@ function NoirButtonFactory.CreateFloatingButton(config)
             if btn then
                 btn.Draggable = state and not isLocked
             end
+        end,
+        SetResizeable = function(state)
+            if resizeHandle then
+                resizeHandle.Visible = state and not isLocked
+            end
+        end,
+        GetSize = function()
+            if btn then
+                return btn.Size.X.Offset
+            end
+            return 0
         end,
         SetTooltip = function(newText, newIconId)
             if tooltipData then
@@ -497,6 +607,13 @@ function NoirButtonFactory.CreateToggleButton(config)
     icon.ZIndex = 10
     icon.Parent = btn
 
+    -- Tạo resize handle
+    local showResize = config.ShowResize ~= false
+    local resizeHandle = nil
+    if showResize then
+        resizeHandle = CreateResizeHandle(btn)
+    end
+
     -- Tạo tooltip
     local showPosition = config.ShowPosition or false
     local tooltipData = nil
@@ -549,6 +666,7 @@ function NoirButtonFactory.CreateToggleButton(config)
     local btnData = { 
         Button = btn, 
         Gui = gui,
+        ResizeHandle = resizeHandle,
         TooltipData = tooltipData
     }
     table.insert(allButtons, btnData)
@@ -604,6 +722,17 @@ function NoirButtonFactory.CreateToggleButton(config)
                 btn.Draggable = state and not isLocked
             end
         end,
+        SetResizeable = function(state)
+            if resizeHandle then
+                resizeHandle.Visible = state and not isLocked
+            end
+        end,
+        GetSize = function()
+            if btn then
+                return btn.Size.X.Offset
+            end
+            return 0
+        end,
         SetTooltip = function(newText, newIconId)
             if tooltipData then
                 if newText then tooltipData.SetText(newText) end
@@ -651,6 +780,9 @@ function NoirButtonFactory.SetLockState(state)
         for _, btnData in ipairs(allButtons) do
             if btnData and btnData.Button then
                 btnData.Button.Draggable = not isLocked
+                if btnData.ResizeHandle then
+                    btnData.ResizeHandle.Visible = not isLocked
+                end
                 if btnData.TooltipData and btnData.TooltipData.Instance then
                     btnData.TooltipData.Instance.Visible = not isLocked
                 end
