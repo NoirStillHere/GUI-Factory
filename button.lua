@@ -6,7 +6,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
-local GITHUB_RAW_URL = "https://raw.githubusercontent.com/NoirStillHere/GUI-Factory/refs/heads/main/Icons.lua"
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/Noir/NoirUI/main/Icons.lua"
 local FALLBACK_ICONS = {
     ['settings'] = "rbxassetid://14007344336",
     ['lock'] = "rbxassetid://10723434711",
@@ -170,8 +170,8 @@ local function CreateAutoLockButton()
     gui.Parent = player:WaitForChild("PlayerGui")
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 55, 0, 55)
-    btn.Position = UDim2.new(0.9, 0, 0.9, 0)
+    btn.Size = UDim2.new(0, 40, 0, 40)
+    btn.Position = UDim2.new(0.9, -30, 0.9, -340)
     btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
     btn.BackgroundTransparency = 0.3
     btn.Draggable = true
