@@ -6,7 +6,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
-local GITHUB_RAW_URL = "https://raw.githubusercontent.com/Noir/NoirUI/main/Icons.lua"
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/NoirStillHere/GUI-Factory/refs/heads/main/Icons.lua"
 local FALLBACK_ICONS = {
     ['settings'] = "rbxassetid://14007344336",
     ['lock'] = "rbxassetid://10723434711",
