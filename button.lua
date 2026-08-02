@@ -1,5 +1,5 @@
 -- ==========================================================
--- NoirButtonFactory v2.4 (Full - Fixed Tooltip)
+-- NoirButtonFactory v2.3 (GitHub Icons Loader)
 -- Author: Noir
 -- ==========================================================
 
@@ -11,32 +11,14 @@ local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
 -- ===== CẤU HÌNH GITHUB =====
-local GITHUB_RAW_URL = "https://raw.githubusercontent.com/Noir/NoirUI/main/Icons.lua"  -- Thay URL của bạn
-local FALLBACK_ICONS = {
+local GITHUB_RAW_URL = "https://raw.githubusercontent.com/Noir/NoirUI/main/Icons.lua"  -- <-- Thay URL của bạn
+local FALLBACK_ICONS = {  -- Fallback nếu không tải được từ GitHub
     ['settings'] = "rbxassetid://14007344336",
     ['lock'] = "rbxassetid://10723434711",
     ['unlock'] = "rbxassetid://10747366027",
     ['home'] = "rbxassetid://10723407389",
     ['user'] = "rbxassetid://10747373176",
-    ['bell'] = "rbxassetid://10709775704",
-    ['cog'] = "rbxassetid://10709810948",
-    ['gear'] = "rbxassetid://10709810948",
-    ['x'] = "rbxassetid://10747384394",
-    ['check'] = "rbxassetid://10709790644",
-    ['plus'] = "rbxassetid://10734924532",
-    ['minus'] = "rbxassetid://10734896206",
-    ['search'] = "rbxassetid://10734943674",
-    ['trash'] = "rbxassetid://10747362393",
-    ['edit'] = "rbxassetid://10734883598",
-    ['save'] = "rbxassetid://10734941499",
-    ['download'] = "rbxassetid://10723344270",
-    ['upload'] = "rbxassetid://10747366434",
-    ['play'] = "rbxassetid://10734923549",
-    ['pause'] = "rbxassetid://10734919336",
-    ['stop'] = "rbxassetid://74753225999323",
-    ['info'] = "rbxassetid://10723415903",
-    ['warning'] = "rbxassetid://10723374276",
-    ['error'] = "rbxassetid://10709753149",
+    -- Thêm các icon fallback cần thiết
 }
 
 -- ===== LOAD ICONS TỪ GITHUB =====
@@ -45,11 +27,15 @@ local isLoading = false
 local loadCallbacks = {}
 
 local function LoadIconsFromGitHub()
-    if Icons ~= nil then return Icons end
-    if isLoading then return nil end
+    if Icons ~= nil then return Icons end  -- Đã load rồi
+    if isLoading then 
+        -- Nếu đang load, chờ đến khi xong
+        return nil
+    end
     
     isLoading = true
     
+    -- Tạo task tải từ GitHub
     task.spawn(function()
         local success, result = pcall(function()
             return HttpService:GetAsync(GITHUB_RAW_URL)
@@ -57,6 +43,7 @@ local function LoadIconsFromGitHub()
         
         if success then
             local successLoad, loadedIcons = pcall(function()
+                -- Chuyển string thành table
                 return loadstring(result)()
             end)
             
@@ -74,34 +61,39 @@ local function LoadIconsFromGitHub()
         
         isLoading = false
         
+        -- Gọi tất cả callback đang chờ
         for _, callback in ipairs(loadCallbacks) do
             callback(Icons)
         end
         loadCallbacks = {}
     end)
     
-    return nil
+    return nil  -- Trả về nil vì chưa load xong
 end
 
 -- Hàm lấy icon ID từ tên
 local function GetIconId(iconName)
     if not iconName then return nil end
     
+    -- Nếu đã là ID đầy đủ, trả về luôn
     if string.match(iconName, "^rbxassetid://") then
         return iconName
     end
     
+    -- Nếu icon chưa load, load ngay
     if Icons == nil then
         LoadIconsFromGitHub()
+        -- Trong lần đầu gọi, có thể chưa có icon, sẽ dùng fallback tạm
         local lowerName = iconName:lower()
         return FALLBACK_ICONS[lowerName] or FALLBACK_ICONS[iconName] or nil
     end
     
+    -- Đã có icons, lấy từ bảng
     local lowerName = iconName:lower()
     return Icons[lowerName] or Icons[iconName] or nil
 end
 
--- Hàm chờ icon load xong
+-- Hàm chờ icon load xong (cho trường hợp cần chắc chắn)
 local function WaitForIcons(callback)
     if Icons ~= nil then
         callback(Icons)
@@ -124,7 +116,7 @@ local SharedState = {
     isModuleLoaded = false,
 }
 
--- ===== TOOLTIP HELPER (Đã sửa lỗi auto-size) =====
+-- ===== TOOLTIP HELPER =====
 local function CreateTooltip(btn, config)
     local tooltipText = config.TooltipText or ""
     local tooltipIcon = config.TooltipIcon or nil
@@ -146,14 +138,12 @@ local function CreateTooltip(btn, config)
     corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = tooltip
 
-    -- Layout để xếp icon + text ngang hàng
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = Enum.FillDirection.Horizontal
     layout.Padding = UDim.new(0, 6)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = tooltip
 
-    -- Icon (nếu có)
     local iconImg = nil
     if tooltipIcon then
         local iconId = GetIconId(tooltipIcon)
@@ -170,7 +160,6 @@ local function CreateTooltip(btn, config)
         end
     end
 
-    -- Text label (dùng AutoSize)
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(0, 0, 0, 20)
     label.BackgroundTransparency = 1
@@ -184,7 +173,6 @@ local function CreateTooltip(btn, config)
     label.LayoutOrder = 2
     label.Parent = tooltip
 
-    -- Hàm cập nhật nội dung
     local function UpdateTooltipContent()
         local finalText = tooltipText
         
@@ -206,33 +194,22 @@ local function CreateTooltip(btn, config)
         
         label.Text = finalText
         
-        -- Chờ 1 frame để TextBounds cập nhật
-        task.wait()
-        
-        -- Lấy kích thước text
         local textBounds = label.TextBounds
-        local textWidth = textBounds.X + 8
-        local textHeight = textBounds.Y + 4
+        label.Size = UDim2.new(0, textBounds.X + 4, 0, textBounds.Y + 4)
         
-        -- Set size cho label
-        label.Size = UDim2.new(0, textWidth, 0, textHeight)
-        
-        -- Tính kích thước tooltip
-        local totalWidth = textWidth + 16
-        local totalHeight = textHeight + 8
+        local totalWidth = textBounds.X + 16
+        local totalHeight = math.max(textBounds.Y + 8, 24)
         
         if iconImg then
             totalWidth = totalWidth + 26
             totalHeight = math.max(totalHeight, 24)
         end
         
-        -- Set size cho tooltip
         tooltip.Size = UDim2.new(0, totalWidth, 0, totalHeight)
         tooltip.Position = UDim2.new(0.5, 0, 0, -totalHeight - 10)
         tooltip.AnchorPoint = Vector2.new(0.5, 0.5)
     end
 
-    -- Cập nhật tooltip khi hover
     btn.MouseEnter:Connect(function()
         if config.ShowTooltip ~= false then
             UpdateTooltipContent()
@@ -245,7 +222,6 @@ local function CreateTooltip(btn, config)
         tooltip.Visible = false
     end)
 
-    -- Nếu có ShowPosition, cập nhật khi nút di chuyển
     if showPosition then
         btn:GetPropertyChangedSignal("Position"):Connect(function()
             if tooltip.Visible then
@@ -282,7 +258,8 @@ local function CreateBaseButton(parent, config, iconId, callback)
     local draggable = config.Draggable ~= false
     local showPosition = config.ShowPosition or false
 
-    local finalIconId = GetIconId(iconId) or iconId
+    -- Lấy icon ID từ tên hoặc ID đầy đủ
+    local finalIconId = GetIconId(iconId) or iconId  -- Fallback nếu không tìm thấy
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, size, 0, size)
@@ -303,7 +280,7 @@ local function CreateBaseButton(parent, config, iconId, callback)
     icon.Position = UDim2.new(0.5, 0, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Image = finalIconId or "rbxassetid://14007344336"
+    icon.Image = finalIconId or "rbxassetid://14007344336"  -- Fallback icon settings
     icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
     icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 10
@@ -345,6 +322,7 @@ local function CreateAutoLockButton()
     local player = Players.LocalPlayer
     if not player then return nil end
 
+    -- Kiểm tra xem Lock button đã tồn tại chưa
     local existingGui = player:WaitForChild("PlayerGui"):FindFirstChild("NoirLockButton")
     if existingGui then
         local btn = existingGui:FindFirstChildWhichIsA("TextButton")
@@ -357,6 +335,7 @@ local function CreateAutoLockButton()
         end
     end
 
+    -- Chưa có, tạo mới
     local gui = Instance.new("ScreenGui")
     gui.Name = "NoirLockButton"
     gui.ResetOnSpawn = false
@@ -378,6 +357,7 @@ local function CreateAutoLockButton()
     corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = btn
 
+    -- Dùng icon từ GetIconId
     local unlockIconId = GetIconId("unlock") or "rbxassetid://10747366027"
     local lockIconId = GetIconId("lock") or "rbxassetid://10723434711"
 
@@ -418,6 +398,7 @@ local function CreateAutoLockButton()
     table.insert(connections, btn.MouseButton1Click:Connect(function()
         state = not state
         if state then
+            -- Lock
             btn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
             icon.Image = lockIconId
             SharedState.isLocked = true
@@ -431,6 +412,7 @@ local function CreateAutoLockButton()
             end
             print("🔒 Locked all buttons")
         else
+            -- Unlock
             btn.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
             icon.Image = unlockIconId
             SharedState.isLocked = false
@@ -770,6 +752,7 @@ local function Init()
         CreateAutoLockButton()
     end
     
+    -- Bắt đầu tải icon từ GitHub
     LoadIconsFromGitHub()
 end
 
